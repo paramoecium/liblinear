@@ -43,6 +43,10 @@ struct model
 	double *w;
 	int *label;		/* label of each class */
 	double bias;
+	//TODO	
+	struct feature_node **SV;
+	double **sv_coef;
+	double threshold;
 };
 
 struct model* train(const struct problem *prob, const struct parameter *param);
