@@ -44,6 +44,20 @@ static void info(const char *fmt,...)
 #else
 static void info(const char *fmt,...) {}
 #endif
+//TODO
+struct svm_node** random_projection(struct svm_node** rbf_kernel, int nA, int nB){
+
+	return NULL;
+}
+struct svm_node** RBF(struct svm_node** A, struct svm_node** B, int nA, int nB, double threshold, double gamma){
+	
+	return NULL;
+}
+static void solve_r_ls_svm_svr(
+	const problem *prob, double *w, const parameter *param, int solver_type){
+
+};
+
 class sparse_operator
 {
 public:
@@ -2219,6 +2233,10 @@ static void train_one(const problem *prob, const parameter *param, double *w, do
 		case L2R_L2LOSS_SVR_DUAL:
 			solve_l2r_l1l2_svr(prob, w, param, L2R_L2LOSS_SVR_DUAL);
 			break;
+		case R_LS_SVM:
+			//TODO
+			solve_r_ls_svm_svr(prob, w, param, R_LS_SVM);
+			break;
 		default:
 			fprintf(stderr, "ERROR: unknown solver_type\n");
 			break;
@@ -2632,6 +2650,11 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		nr_w = 1;
 	else
 		nr_w = nr_class;
+
+	//TODO
+	if(model_->param.solver_type == R_LS_SVM){
+	
+	}
 
 	const feature_node *lx=x;
 	for(i=0;i<nr_w;i++)
