@@ -209,6 +209,8 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 	param.weight_label = NULL;
 	param.weight = NULL;
 	param.init_sol = NULL;
+	param.gamma = 0;
+	param.threshold = 0;
 	flag_cross_validation = 0;
 	flag_C_specified = 0;
 	flag_solver_specified = 0;
@@ -271,6 +273,14 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 			case 'C':
 				flag_find_C = 1;
 				i--;
+				break;
+
+			case 'g':
+				param.gamma = atof(argv[i]);
+				break;
+
+			case 't':
+				param.threshold = atof(argv[i]);
 				break;
 
 			default:
@@ -341,6 +351,9 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 			case L2R_L1LOSS_SVR_DUAL:
 			case L2R_L2LOSS_SVR_DUAL:
 				param.eps = 0.1;
+				break;
+			case R_LS_SVM:
+				fprintf(stdout, "successfully choose R_LS_SVM.\n");
 				break;
 		}
 	}
