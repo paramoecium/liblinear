@@ -2781,13 +2781,15 @@ int save_model(const char *model_file_name, const struct model *model_)
 
 	fprintf(fp, "bias %.16g\n", model_->bias);
 
-	fprintf(fp, "w %d\n", w_size);
-	for(i=0; i<w_size; i++)
-	{
-		int j;
-		for(j=0; j<nr_w; j++)
-			fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
-		fprintf(fp, "\n");
+	if(param.solver_type != R_LS_SVM){
+		fprintf(fp, "w %d\n", w_size);
+		for(i=0; i<w_size; i++)
+		{
+			int j;
+			for(j=0; j<nr_w; j++)
+				fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
+			fprintf(fp, "\n");
+		}
 	}
 	if(param.solver_type == R_LS_SVM){
 		fprintf(fp,"gamma\n%.8g\n", param.gamma);
@@ -2803,8 +2805,8 @@ int save_model(const char *model_file_name, const struct model *model_)
 				fprintf(fp, "%.16g ",sv_coef[j][i]);
 	
 			const feature_node *p = SV[i];
-	
-			while(p->index != -1)
+			
+			while(p->index != -1 && p->index != -2)
 			{
 				fprintf(fp,"%d:%.8g ",p->index,p->value);
 				p++;
@@ -2944,6 +2946,7 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"gamma")==0){
 			FSCANF(fp,"%lf",&gamma);
+			fprintf(stderr,"gamma_finished\n");
 			param.gamma = gamma;
 		}
 		else if(strcmp(cmd,"total_sv")==0){
@@ -2952,6 +2955,7 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"threshold")==0){
 			FSCANF(fp,"%lf",&threshold);
+			fprintf(stderr,"threshold\n");
 			param.threshold = threshold;
 		}
 		else if(strcmp(cmd,"SV")==0){
@@ -2987,6 +2991,8 @@ struct model *load_model(const char *model_file_name)
 			model_->SV = Malloc(feature_node*,l);
 			feature_node *x_space = NULL;
 			if(l>0) x_space = Malloc(feature_node,elements+model_->nSV);
+			
+			readline(fp);
 
 			int j=0;
 			for(i=0;i<l;i++)
@@ -3014,9 +3020,12 @@ struct model *load_model(const char *model_file_name)
 		
 					++j;
 				}
+				x_space[j].index = -2;
+				x_space[j++].value = model_->bias;
 				x_space[j++].index = -1;
 			}
 			free(line);
+			break;
 		}
 		else
 		{
@@ -3026,6 +3035,7 @@ struct model *load_model(const char *model_file_name)
 	}
 
 	if(!R_LS_SVM_FLAG){
+		fprintf(stderr,"failed\n");
 		nr_feature=model_->nr_feature;
 		if(model_->bias>=0)
 			n=nr_feature+1;

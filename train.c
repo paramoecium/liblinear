@@ -125,6 +125,18 @@ int main(int argc, char **argv)
 	else
 	{
 		model_=train(&prob, &param);
+		//
+		model_->nSV = 2;
+		model_->SV = (feature_node**)malloc(model_->nSV*sizeof(feature_node*));
+		model_->SV[0] = prob.x[3];
+		model_->SV[1] = prob.x[5];
+		model_->sv_coef = (double**)malloc((model_->nr_class-1)*sizeof(double*));
+		for(int i = 0; i < model_->nr_class-1; i++){
+			model_->sv_coef[i] = (double*)malloc(model_->nSV*sizeof(double));
+			for(int j = 0; j < model_->nSV; j++)
+				model_->sv_coef[i][j] = i+j;
+		}
+		//
 		if(save_model(model_file_name, model_))
 		{
 			fprintf(stderr,"can't save model to file %s\n",model_file_name);
@@ -452,8 +464,10 @@ void read_problem(const char *filename)
 	{
 		prob.n=max_index+1;
 		for(i=1;i<prob.l;i++)
-			(prob.x[i]-2)->index = prob.n;
-		x_space[j-2].index = prob.n;
+			(prob.x[i]-2)->index = -2;
+		x_space[j-2].index = -2;
+//			(prob.x[i]-2)->index = prob.n;
+//		x_space[j-2].index = prob.n;
 	}
 	else
 		prob.n=max_index;
