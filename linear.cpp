@@ -2871,6 +2871,7 @@ struct model *load_model(const char *model_file_name)
 	FILE *fp = fopen(model_file_name,"r");
 	if(fp==NULL) return NULL;
 
+	bool R_LS_SVM_FLAG = false;
 	int i;
 	int nr_feature;
 	int n;
@@ -2904,6 +2905,8 @@ struct model *load_model(const char *model_file_name)
 				if(strcmp(solver_type_table[i],cmd)==0)
 				{
 					param.solver_type=i;
+					if(i == 8)
+						R_LS_SVM_FLAG = true;
 					break;
 				}
 			}
@@ -2969,6 +2972,7 @@ struct model *load_model(const char *model_file_name)
 						break;
 					++elements;
 				}
+				++elements;
 			}
 			elements += model_->nSV;
 
@@ -2982,7 +2986,7 @@ struct model *load_model(const char *model_file_name)
 				model_->sv_coef[i] = Malloc(double,l);
 			model_->SV = Malloc(feature_node*,l);
 			feature_node *x_space = NULL;
-			if(l>0) x_space = Malloc(feature_node,elements);
+			if(l>0) x_space = Malloc(feature_node,elements+model_->nSV);
 
 			int j=0;
 			for(i=0;i<l;i++)
@@ -3021,29 +3025,32 @@ struct model *load_model(const char *model_file_name)
 		}
 	}
 
-	nr_feature=model_->nr_feature;
-	if(model_->bias>=0)
-		n=nr_feature+1;
-	else
-		n=nr_feature;
-	int w_size = n;
-	int nr_w;
-	if(nr_class==2 && param.solver_type != MCSVM_CS)
-		nr_w = 1;
-	else
-		nr_w = nr_class;
-
-	model_->w=Malloc(double, w_size*nr_w);
-	for(i=0; i<w_size; i++)
-	{
-		int j;
-		for(j=0; j<nr_w; j++)
-			FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
-		if (fscanf(fp, "\n") !=0)
+	if(!R_LS_SVM_FLAG){
+		nr_feature=model_->nr_feature;
+		if(model_->bias>=0)
+			n=nr_feature+1;
+		else
+			n=nr_feature;
+		int w_size = n;
+		int nr_w;
+		if(nr_class==2 && param.solver_type != MCSVM_CS)
+			nr_w = 1;
+		else
+			nr_w = nr_class;
+	
+		model_->w=Malloc(double, w_size*nr_w);
+		for(i=0; i<w_size; i++)
 		{
-			fprintf(stderr, "ERROR: fscanf failed to read the model\n");
-			EXIT_LOAD_MODEL()
+			int j;
+			for(j=0; j<nr_w; j++)
+				FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
+			if (fscanf(fp, "\n") !=0)
+			{
+				fprintf(stderr, "ERROR: fscanf failed to read the model\n");
+				EXIT_LOAD_MODEL()
+			}
 		}
+
 	}
 
 	setlocale(LC_ALL, old_locale);
