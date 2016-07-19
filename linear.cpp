@@ -2947,7 +2947,6 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"gamma")==0){
 			FSCANF(fp,"%lf",&gamma);
-			fprintf(stderr,"gamma_finished\n");
 			param.gamma = gamma;
 		}
 		else if(strcmp(cmd,"total_sv")==0){
@@ -2956,7 +2955,6 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"threshold")==0){
 			FSCANF(fp,"%lf",&threshold);
-			fprintf(stderr,"threshold\n");
 			param.threshold = threshold;
 		}
 		else if(strcmp(cmd,"SV")==0){
