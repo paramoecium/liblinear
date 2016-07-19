@@ -2655,37 +2655,38 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 
 	//TODO
 	if(model_->param.solver_type == R_LS_SVM){
-	
+		return model_->label[1];
 	}
-
-	const feature_node *lx=x;
-	for(i=0;i<nr_w;i++)
-		dec_values[i] = 0;
-	for(; (idx=lx->index)!=-1; lx++)
-	{
-		// the dimension of testing data may exceed that of training
-		if(idx<=n)
-			for(i=0;i<nr_w;i++)
-				dec_values[i] += w[(idx-1)*nr_w+i]*lx->value;
-	}
-
-	if(nr_class==2)
-	{
-		if(check_regression_model(model_))
-			return dec_values[0];
-		else
-			return (dec_values[0]>0)?model_->label[0]:model_->label[1];
-	}
-	else
-	{
-		int dec_max_idx = 0;
-		for(i=1;i<nr_class;i++)
+	else{
+		const feature_node *lx=x;
+		for(i=0;i<nr_w;i++)
+			dec_values[i] = 0;
+		for(; (idx=lx->index)!=-1; lx++)
 		{
-			if(dec_values[i] > dec_values[dec_max_idx])
-				dec_max_idx = i;
+			// the dimension of testing data may exceed that of training
+			if(idx<=n)
+				for(i=0;i<nr_w;i++)
+					dec_values[i] += w[(idx-1)*nr_w+i]*lx->value;
 		}
-		return model_->label[dec_max_idx];
-	}
+	
+		if(nr_class==2)
+		{
+			if(check_regression_model(model_))
+				return dec_values[0];
+			else
+				return (dec_values[0]>0)?model_->label[0]:model_->label[1];
+		}
+		else
+		{
+			int dec_max_idx = 0;
+			for(i=1;i<nr_class;i++)
+			{
+				if(dec_values[i] > dec_values[dec_max_idx])
+					dec_max_idx = i;
+			}
+			return model_->label[dec_max_idx];
+		}
+	}	
 }
 
 double predict(const model *model_, const feature_node *x)

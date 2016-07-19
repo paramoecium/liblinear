@@ -145,6 +145,7 @@ void do_predict(FILE *input, FILE *output)
 		else
 		{
 			predict_label = predict(model_,x);
+			fprintf(stderr, "finnished.\n");
 			fprintf(output,"%g\n",predict_label);
 		}
 
@@ -231,6 +232,8 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	fprintf(stderr,"model open_load finished.\n");
+	
 	x = (struct feature_node *) malloc(max_nr_attr*sizeof(struct feature_node));
 	do_predict(input, output);
 	free_and_destroy_model(&model_);
