@@ -91,6 +91,24 @@ public:
 			x++;
 		}
 	}
+	
+	static double* equals(double* output, const feature_node** x, const int l, const int n){
+		int index;
+
+		for(int i = 0; i < l*n; i++)
+			output[i] = 0;
+
+		for(int i = 0; i < l; i++){
+			index = 0;
+			while(x[i][index].index != -1){
+				output[n*i + x[i][index].index] = x[i][index].value;
+				index++;
+			}
+		}
+
+
+		return output;
+	}
 
 	static feature_node** equals(feature_node** output, const double *x, const int l, const int n){
 		int elements = 0;
