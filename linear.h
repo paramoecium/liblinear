@@ -16,7 +16,7 @@ struct problem
 	int l, n;
 	double *y;
 	struct feature_node **x;
-	double bias;            /* < 0 if no bias term */  
+	double bias;            /* < 0 if no bias term */
 };
 
 enum { L2R_LR, L2R_L2LOSS_SVC_DUAL, L2R_L2LOSS_SVC, L2R_L1LOSS_SVC_DUAL, MCSVM_CS, L1R_L2LOSS_SVC, L1R_LR, L2R_LR_DUAL, L2R_L2LOSS_SVR = 11, L2R_L2LOSS_SVR_DUAL, L2R_L1LOSS_SVR_DUAL, R_LS_SVM}; /* solver_type */
@@ -33,8 +33,11 @@ struct parameter
 	double* weight;
 	double p;
 	double *init_sol;
-	//TODO
+	//TODO members we added in struct parameter
 	double gamma;
+	int m1;		/*number of columns selected*/
+	int m2;		/*number of measurements of random projection*/
+	double threshold;
 };
 
 struct model
@@ -45,10 +48,9 @@ struct model
 	double *w;
 	int *label;		/* label of each class */
 	double bias;
-	//TODO
+	//TODO members we added in struct model
 	struct feature_node **SV;
 	double **sv_coef;	//alpha
-	double threshold;
 };
 
 struct model* train(const struct problem *prob, const struct parameter *param);
@@ -82,4 +84,3 @@ void set_print_string_function(void (*print_func) (const char*));
 #endif
 
 #endif /* _LIBLINEAR_H */
-
