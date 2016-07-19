@@ -91,6 +91,30 @@ public:
 			x++;
 		}
 	}
+
+	static feature_node** equals(feature_node** output, const double *x, const int l, const int n){
+		int elements = 0;
+		for(int i = 0; i < l*n; i++)
+			if(x[i] != 0)
+				elements++;
+		
+		feature_node* matrix_node = (feature_node*)malloc((elements+l)*sizeof(feature_node));
+		int index = 0;
+		for(int i = 0; i < l; i++){
+			output[i] = &matrix_node[index];
+			for(int j = 0; j < n; j++){
+				if(x[i*n+j] != 0){
+					matrix_node[index].index = i*n+j;
+					matrix_node[index].value = x[i*n+j];
+					index++;
+				}
+			}
+			matrix_node[index].index = -1;
+			index++;
+		}
+	
+		return output;
+	}
 };
 
 class l2r_lr_fun: public function
