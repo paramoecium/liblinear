@@ -82,14 +82,46 @@ public:
 			x++;
 		}
 	}
-	//TODO dense matrox to sparse matrix(maybe use template)
-	static double* equals(double* output, const feature_node **x,
-		const int l, const int n){
+	
+	static double* equals(double* output, const feature_node** x, const int l, const int n){
+		int index;
 
+		for(int i = 0; i < l*n; i++)
+			output[i] = 0;
+
+		for(int i = 0; i < l; i++){
+			index = 0;
+			while(x[i][index].index != -1){
+				output[n*i + x[i][index].index] = x[i][index].value;
+				index++;
+			}
+		}
+
+		return output;
 	}
-	static feature_node** equals(feature_node **output, const double*x,
-		const int l, const int n){
 
+	static feature_node** equals(feature_node** output, const double *x, const int l, const int n){
+		int elements = 0;
+		for(int i = 0; i < l*n; i++)
+			if(x[i] != 0)
+				elements++;
+		
+		feature_node* matrix_node = (feature_node*)malloc((elements+l)*sizeof(feature_node));
+		int index = 0;
+		for(int i = 0; i < l; i++){
+			output[i] = &matrix_node[index];
+			for(int j = 0; j < n; j++){
+				if(x[i*n+j] != 0){
+					matrix_node[index].index = i*n+j;
+					matrix_node[index].value = x[i*n+j];
+					index++;
+				}
+			}
+			matrix_node[index].index = -1;
+			index++;
+		}
+	
+		return output;
 	}
 };
 //TODO functions for our solver
@@ -2482,6 +2514,8 @@ model* train(const problem *prob, const parameter *param)
 		}
 		else
 		{
+			if(param->solver_type == R_LS_SVM)
+				model_->nSV = 0;
 			if(nr_class == 2)
 			{
 				model_->w=Malloc(double, w_size);
@@ -2775,43 +2809,40 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 	else
 		nr_w = nr_class;
 
-	const feature_node *lx=x;
-	for(i=0;i<nr_w;i++)
-		dec_values[i] = 0;
-	for(; (idx=lx->index)!=-1; lx++)
-	{
-		// the dimension of testing data may exceed that of training
-		if(idx<=n)
-			for(i=0;i<nr_w;i++)
-			{
-				//TODO
-				if(model_->param.solver_type == R_LS_SVM){
-
-				}
-				else
-				{
-					dec_values[i] += w[(idx-1)*nr_w+i]*lx->value;
-				}
-			}
+	//TODO
+	if(model_->param.solver_type == R_LS_SVM){
+		return model_->label[1];
 	}
-
-	if(nr_class==2)
-	{
-		if(check_regression_model(model_))
-			return dec_values[0];
-		else
-			return (dec_values[0]>0)?model_->label[0]:model_->label[1];
-	}
-	else
-	{
-		int dec_max_idx = 0;
-		for(i=1;i<nr_class;i++)
+	else{
+		const feature_node *lx=x;
+		for(i=0;i<nr_w;i++)
+			dec_values[i] = 0;
+		for(; (idx=lx->index)!=-1; lx++)
 		{
-			if(dec_values[i] > dec_values[dec_max_idx])
-				dec_max_idx = i;
+			// the dimension of testing data may exceed that of training
+			if(idx<=n)
+				for(i=0;i<nr_w;i++)
+					dec_values[i] += w[(idx-1)*nr_w+i]*lx->value;
 		}
-		return model_->label[dec_max_idx];
-	}
+	
+		if(nr_class==2)
+		{
+			if(check_regression_model(model_))
+				return dec_values[0];
+			else
+				return (dec_values[0]>0)?model_->label[0]:model_->label[1];
+		}
+		else
+		{
+			int dec_max_idx = 0;
+			for(i=1;i<nr_class;i++)
+			{
+				if(dec_values[i] > dec_values[dec_max_idx])
+					dec_max_idx = i;
+			}
+			return model_->label[dec_max_idx];
+		}
+	}	
 }
 
 double predict(const model *model_, const feature_node *x)
@@ -2859,8 +2890,8 @@ double predict_probability(const struct model *model_, const struct feature_node
 static const char *solver_type_table[]=
 {
 	"L2R_LR", "L2R_L2LOSS_SVC_DUAL", "L2R_L2LOSS_SVC", "L2R_L1LOSS_SVC_DUAL", "MCSVM_CS",
-	"L1R_L2LOSS_SVC", "L1R_LR", "L2R_LR_DUAL",
-	"", "", "",
+	"L1R_L2LOSS_SVC", "L1R_LR", "L2R_LR_DUAL", "R_LS_SVM",
+	"", "",
 	"L2R_L2LOSS_SVR", "L2R_L2LOSS_SVR_DUAL", "L2R_L1LOSS_SVR_DUAL", NULL
 };
 
@@ -2907,14 +2938,41 @@ int save_model(const char *model_file_name, const struct model *model_)
 
 	fprintf(fp, "bias %.16g\n", model_->bias);
 
-	fprintf(fp, "w\n");
-	for(i=0; i<w_size; i++)
-	{
-		int j;
-		for(j=0; j<nr_w; j++)
-			fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
-		fprintf(fp, "\n");
+	if(param.solver_type != R_LS_SVM){
+		fprintf(fp, "w %d\n", w_size);
+		for(i=0; i<w_size; i++)
+		{
+			int j;
+			for(j=0; j<nr_w; j++)
+				fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
+			fprintf(fp, "\n");
+		}
 	}
+	if(param.solver_type == R_LS_SVM){
+		fprintf(fp,"gamma\n%.8g\n", param.gamma);
+		fprintf(fp, "threshold\n%.8g\n", param.threshold);
+		fprintf(fp, "total_sv\n%d\n", model_->nSV);
+		
+		fprintf(fp, "SV\n");
+		const double * const *sv_coef = model_->sv_coef;
+		const feature_node * const *SV = model_->SV;
+		for(int i=0;i<model_->nSV;i++)
+		{
+			for(int j=0;j<model_->nr_class-1;j++)
+				fprintf(fp, "%.16g ",sv_coef[j][i]);
+	
+			const feature_node *p = SV[i];
+			
+			while(p->index != -1 && p->index != -2)
+			{
+				fprintf(fp,"%d:%.8g ",p->index,p->value);
+				p++;
+			}
+			fprintf(fp, "\n");
+		}
+			
+	}
+
 
 	setlocale(LC_ALL, old_locale);
 	free(old_locale);
@@ -2947,16 +3005,40 @@ int save_model(const char *model_file_name, const struct model *model_)
 	free(old_locale);\
 	return NULL;\
 }
+static char *line = NULL;
+static int max_line_len;
+
+static char* readline(FILE *input)
+{
+	int len;
+
+	if(fgets(line,max_line_len,input) == NULL)
+		return NULL;
+
+	while(strrchr(line,'\n') == NULL)
+	{
+		max_line_len *= 2;
+		line = (char *) realloc(line,max_line_len);
+		len = (int) strlen(line);
+		if(fgets(line+len,max_line_len-len,input) == NULL)
+			break;
+	}
+	return line;
+}
 struct model *load_model(const char *model_file_name)
 {
 	FILE *fp = fopen(model_file_name,"r");
 	if(fp==NULL) return NULL;
 
+	bool R_LS_SVM_FLAG = false;
 	int i;
 	int nr_feature;
 	int n;
 	int nr_class;
 	double bias;
+	double gamma;
+	int nSV;
+	double threshold;
 	model *model_ = Malloc(model,1);
 	parameter& param = model_->param;
 
@@ -2982,6 +3064,8 @@ struct model *load_model(const char *model_file_name)
 				if(strcmp(solver_type_table[i],cmd)==0)
 				{
 					param.solver_type=i;
+					if(i == 8)
+						R_LS_SVM_FLAG = true;
 					break;
 				}
 			}
@@ -3017,6 +3101,87 @@ struct model *load_model(const char *model_file_name)
 			for(int i=0;i<nr_class;i++)
 				FSCANF(fp,"%d",&model_->label[i]);
 		}
+		else if(strcmp(cmd,"gamma")==0){
+			FSCANF(fp,"%lf",&gamma);
+			param.gamma = gamma;
+		}
+		else if(strcmp(cmd,"total_sv")==0){
+			FSCANF(fp,"%d",&nSV);
+			model_->nSV = nSV;
+		}
+		else if(strcmp(cmd,"threshold")==0){
+			FSCANF(fp,"%lf",&threshold);
+			param.threshold = threshold;
+		}
+		else if(strcmp(cmd,"SV")==0){
+			int elements = 0;
+			long pos = ftell(fp);
+	
+			max_line_len = 1024;
+			line = Malloc(char,max_line_len);
+			char *p,*endptr,*idx,*val;
+
+			while(readline(fp)!=NULL)
+			{
+				p = strtok(line,":");
+				while(1)
+				{
+					p = strtok(NULL,":");
+					if(p == NULL)
+						break;
+					++elements;
+				}
+				++elements;
+			}
+			elements += model_->nSV;
+
+			fseek(fp,pos,SEEK_SET);
+			
+			int m = model_->nr_class - 1;
+			int l = model_->nSV;
+			model_->sv_coef = Malloc(double *,m);
+			int i;
+			for(i=0;i<m;i++)
+				model_->sv_coef[i] = Malloc(double,l);
+			model_->SV = Malloc(feature_node*,l);
+			feature_node *x_space = NULL;
+			if(l>0) x_space = Malloc(feature_node,elements+model_->nSV);
+			
+			readline(fp);
+
+			int j=0;
+			for(i=0;i<l;i++)
+			{
+				readline(fp);
+				model_->SV[i] = &x_space[j];
+		
+				p = strtok(line, " \t");
+				model_->sv_coef[0][i] = strtod(p,&endptr);
+				for(int k=1;k<m;k++)
+				{
+					p = strtok(NULL, " \t");
+					model_->sv_coef[k][i] = strtod(p,&endptr);
+				}
+		
+				while(1)
+				{
+					idx = strtok(NULL, ":");
+					val = strtok(NULL, " \t");
+		
+					if(val == NULL)
+						break;
+					x_space[j].index = (int) strtol(idx,&endptr,10);
+					x_space[j].value = strtod(val,&endptr);
+		
+					++j;
+				}
+				x_space[j].index = -2;
+				x_space[j++].value = model_->bias;
+				x_space[j++].index = -1;
+			}
+			free(line);
+			break;
+		}
 		else
 		{
 			fprintf(stderr,"unknown text in model file: [%s]\n",cmd);
@@ -3024,29 +3189,33 @@ struct model *load_model(const char *model_file_name)
 		}
 	}
 
-	nr_feature=model_->nr_feature;
-	if(model_->bias>=0)
-		n=nr_feature+1;
-	else
-		n=nr_feature;
-	int w_size = n;
-	int nr_w;
-	if(nr_class==2 && param.solver_type != MCSVM_CS)
-		nr_w = 1;
-	else
-		nr_w = nr_class;
-
-	model_->w=Malloc(double, w_size*nr_w);
-	for(i=0; i<w_size; i++)
-	{
-		int j;
-		for(j=0; j<nr_w; j++)
-			FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
-		if (fscanf(fp, "\n") !=0)
+	if(!R_LS_SVM_FLAG){
+		fprintf(stderr,"failed\n");
+		nr_feature=model_->nr_feature;
+		if(model_->bias>=0)
+			n=nr_feature+1;
+		else
+			n=nr_feature;
+		int w_size = n;
+		int nr_w;
+		if(nr_class==2 && param.solver_type != MCSVM_CS)
+			nr_w = 1;
+		else
+			nr_w = nr_class;
+	
+		model_->w=Malloc(double, w_size*nr_w);
+		for(i=0; i<w_size; i++)
 		{
-			fprintf(stderr, "ERROR: fscanf failed to read the model\n");
-			EXIT_LOAD_MODEL()
+			int j;
+			for(j=0; j<nr_w; j++)
+				FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
+			if (fscanf(fp, "\n") !=0)
+			{
+				fprintf(stderr, "ERROR: fscanf failed to read the model\n");
+				EXIT_LOAD_MODEL()
+			}
 		}
+
 	}
 
 	setlocale(LC_ALL, old_locale);
@@ -3170,7 +3339,8 @@ const char *check_parameter(const problem *prob, const parameter *param)
 		&& param->solver_type != L2R_LR_DUAL
 		&& param->solver_type != L2R_L2LOSS_SVR
 		&& param->solver_type != L2R_L2LOSS_SVR_DUAL
-		&& param->solver_type != L2R_L1LOSS_SVR_DUAL)
+		&& param->solver_type != L2R_L1LOSS_SVR_DUAL
+		&& param->solver_type != R_LS_SVM)
 		return "unknown solver type";
 
 	if(param->init_sol != NULL
