@@ -133,10 +133,10 @@ static int* random_sampling(int* sample_id, const int sample_size,
 	//assert(sample_size < arr_size);
 	std::vector<int> b(sample_size);
 
-	for(std::size_t i = 0; i != arr_size; ++i) {
+	for(int i = 0; i != arr_size; ++i) {
 			std::uniform_int_distribution<> dis(0, i);
-			std::size_t j = dis(gen);
-			if(j < b.size()) {
+			int j = dis(gen);
+			if((unsigned int)j < b.size()) {
 					if(i < j) {
 							b[i] = b[j];
 					}
