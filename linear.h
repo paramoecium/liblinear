@@ -51,7 +51,6 @@ struct model
 	//TODO
 	int nSV;
 	struct feature_node **SV;
-	double **sv_coef;	//alpha
 };
 
 struct model* train(const struct problem *prob, const struct parameter *param);

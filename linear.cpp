@@ -202,7 +202,7 @@ static double* random_projection(double* projected_matrix,
 	}
 	return projected_matrix;
 }
-static void solve_r_ls_svm_svr(const problem *prob, double *w,
+static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	const parameter *param, double Cp, double Cn)
 {
 	int l = prob->l;
@@ -2390,8 +2390,7 @@ static void train_one(const problem *prob, const parameter *param, double *w, do
 			solve_l2r_l1l2_svr(prob, w, param, L2R_L2LOSS_SVR_DUAL);
 			break;
 		case R_LS_SVM:
-			//TODO where we call our solver
-			solve_r_ls_svm_svr(prob, w, param, Cp, Cn);
+			solve_r_ls_svm_svc(prob, w, param, Cp, Cn);
 			break;
 		default:
 			fprintf(stderr, "ERROR: unknown solver_type\n");
@@ -2492,32 +2491,88 @@ model* train(const problem *prob, const parameter *param)
 		for(i=0;i<l;i++)
 			x[i] = prob->x[perm[i]];
 
-		int k;
-		problem sub_prob;
-		sub_prob.l = l;
-		sub_prob.n = n;
-		sub_prob.x = Malloc(feature_node *,sub_prob.l);
-		sub_prob.y = Malloc(double,sub_prob.l);
-
-		for(k=0; k<sub_prob.l; k++)
-			sub_prob.x[k] = x[k];
 
 		// multi-class svm by Crammer and Singer
 		if(param->solver_type == MCSVM_CS)
 		{
+			int k;
+			problem sub_prob;
+			sub_prob.l = l;
+			sub_prob.n = n;
+			sub_prob.x = Malloc(feature_node *,sub_prob.l);
+			sub_prob.y = Malloc(double,sub_prob.l);
+
+			for(k=0; k<sub_prob.l; k++)
+				sub_prob.x[k] = x[k];
+
 			model_->w=Malloc(double, n*nr_class);
 			for(i=0;i<nr_class;i++)
 				for(j=start[i];j<start[i]+count[i];j++)
 					sub_prob.y[j] = i;
 			Solver_MCSVM_CS Solver(&sub_prob, nr_class, weighted_C, param->eps);
 			Solver.Solve(model_->w);
+			free(sub_prob.x);
+			free(sub_prob.y);
 		}
 		else
 		{
-			if(param->solver_type == R_LS_SVM)
+			if(param->solver_type == R_LS_SVM){
 				model_->nSV = 0;
-			if(nr_class == 2)
+				//TODO
+				w_size = param->m1;
+				model_->w=Malloc(double, w_size*nr_class*(nr_class-1)/2);
+				double *w=Malloc(double, w_size);
+		
+				for(i=0;i<nr_class;i++)
+					for(j=i+1;j<nr_class;j++){
+						problem sub_prob;
+						int si = start[i], sj = start[j];
+						int ci = count[i], cj = count[j];
+						sub_prob.l = ci+cj;
+						sub_prob.n = n;
+						sub_prob.x = Malloc(feature_node *,sub_prob.l);
+						sub_prob.y = Malloc(double,sub_prob.l);
+						int k;
+						for(k=0;k<ci;k++)
+						{
+							sub_prob.x[k] = x[si+k];
+							sub_prob.y[k] = +1;
+						}
+						for(k=0;k<cj;k++)
+						{
+							sub_prob.x[ci+k] = x[sj+k];
+							sub_prob.y[ci+k] = -1;
+						}
+
+						if(param->init_sol != NULL)
+							for(int k=0;k<w_size;k++)
+								w[k] = param->init_sol[(i*nr_class+j-i-1)*nr_class+k];
+						else
+							for(k=0;k<w_size;k++)
+								w[k] = 0;
+						
+						train_one(&sub_prob, param, w, weighted_C[i], weighted_C[j]);
+	
+						for(int k=0;k<w_size;j++)
+							model_->w[(i*nr_class+j-i-1)*nr_class+k] = w[k];
+						
+						free(sub_prob.x);
+						free(sub_prob.y);
+					}
+				free(w);
+			}
+			else if(nr_class == 2)
 			{
+				int k;
+				problem sub_prob;
+				sub_prob.l = l;
+				sub_prob.n = n;
+				sub_prob.x = Malloc(feature_node *,sub_prob.l);
+				sub_prob.y = Malloc(double,sub_prob.l);
+
+				for(k=0; k<sub_prob.l; k++)
+					sub_prob.x[k] = x[k];
+
 				model_->w=Malloc(double, w_size);
 
 				int e0 = start[0]+count[0];
@@ -2535,9 +2590,20 @@ model* train(const problem *prob, const parameter *param)
 						model_->w[i] = 0;
 
 				train_one(&sub_prob, param, model_->w, weighted_C[0], weighted_C[1]);
+				free(sub_prob.x);
+				free(sub_prob.y);
 			}
 			else
 			{
+				int k;
+				problem sub_prob;
+				sub_prob.l = l;
+				sub_prob.n = n;
+				sub_prob.x = Malloc(feature_node *,sub_prob.l);
+				sub_prob.y = Malloc(double,sub_prob.l);
+
+				for(k=0; k<sub_prob.l; k++)
+					sub_prob.x[k] = x[k];
 				model_->w=Malloc(double, w_size*nr_class);
 				double *w=Malloc(double, w_size);
 				for(i=0;i<nr_class;i++)
@@ -2564,6 +2630,8 @@ model* train(const problem *prob, const parameter *param)
 
 					for(int j=0;j<w_size;j++)
 						model_->w[j*nr_class+i] = w[j];
+					free(sub_prob.x);
+					free(sub_prob.y);
 				}
 				free(w);
 			}
@@ -2575,8 +2643,6 @@ model* train(const problem *prob, const parameter *param)
 		free(start);
 		free(count);
 		free(perm);
-		free(sub_prob.x);
-		free(sub_prob.y);
 		free(weighted_C);
 	}
 	return model_;
@@ -2938,29 +3004,16 @@ int save_model(const char *model_file_name, const struct model *model_)
 
 	fprintf(fp, "bias %.16g\n", model_->bias);
 
-	if(param.solver_type != R_LS_SVM){
-		fprintf(fp, "w %d\n", w_size);
-		for(i=0; i<w_size; i++)
-		{
-			int j;
-			for(j=0; j<nr_w; j++)
-				fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
-			fprintf(fp, "\n");
-		}
-	}
 	if(param.solver_type == R_LS_SVM){
 		fprintf(fp,"gamma\n%.8g\n", param.gamma);
 		fprintf(fp, "threshold\n%.8g\n", param.threshold);
-		fprintf(fp, "total_sv\n%d\n", model_->nSV);
+		fprintf(fp, "m1\n%d\n", param.m1);
+		fprintf(fp, "m2\n%d\n", param.m2);
 		
 		fprintf(fp, "SV\n");
-		const double * const *sv_coef = model_->sv_coef;
 		const feature_node * const *SV = model_->SV;
 		for(int i=0;i<model_->nSV;i++)
 		{
-			for(int j=0;j<model_->nr_class-1;j++)
-				fprintf(fp, "%.16g ",sv_coef[j][i]);
-	
 			const feature_node *p = SV[i];
 			
 			while(p->index != -1 && p->index != -2)
@@ -2970,7 +3023,19 @@ int save_model(const char *model_file_name, const struct model *model_)
 			}
 			fprintf(fp, "\n");
 		}
-			
+	}
+	fprintf(fp, "w %d\n", w_size);
+	for(i=0; i<w_size; i++)
+	{
+		int j;
+		for(j=0; j<nr_w; j++){
+			if(param.solver_type == R_LS_SVM)
+				for(int k = j+1; k<nr_w; k++)
+					fprintf(fp, "%.16g ", model_->w[(j*nr_w+k-j-1)*nr_w+i]);
+			else
+				fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
+		}
+		fprintf(fp, "\n");
 	}
 
 
@@ -3033,7 +3098,7 @@ struct model *load_model(const char *model_file_name)
 	bool R_LS_SVM_FLAG = false;
 	int i;
 	int nr_feature;
-	int n;
+	int n, m1, m2;
 	int nr_class;
 	double bias;
 	double gamma;
@@ -3085,6 +3150,21 @@ struct model *load_model(const char *model_file_name)
 			FSCANF(fp,"%d",&nr_feature);
 			model_->nr_feature=nr_feature;
 		}
+		else if(strcmp(cmd,"nSV")==0)
+		{
+			FSCANF(fp,"%d",&nSV);
+			model_->nSV=nSV;
+		}
+		else if(strcmp(cmd,"m1")==0)
+		{
+			FSCANF(fp,"%d",&m1);
+			param.m1=m1;
+		}
+		else if(strcmp(cmd,"m2")==0)
+		{
+			FSCANF(fp,"%d",&m2);
+			param.m2=m2;
+		}
 		else if(strcmp(cmd,"bias")==0)
 		{
 			FSCANF(fp,"%lf",&bias);
@@ -3104,10 +3184,6 @@ struct model *load_model(const char *model_file_name)
 		else if(strcmp(cmd,"gamma")==0){
 			FSCANF(fp,"%lf",&gamma);
 			param.gamma = gamma;
-		}
-		else if(strcmp(cmd,"total_sv")==0){
-			FSCANF(fp,"%d",&nSV);
-			model_->nSV = nSV;
 		}
 		else if(strcmp(cmd,"threshold")==0){
 			FSCANF(fp,"%lf",&threshold);
@@ -3137,12 +3213,7 @@ struct model *load_model(const char *model_file_name)
 
 			fseek(fp,pos,SEEK_SET);
 			
-			int m = model_->nr_class - 1;
 			int l = model_->nSV;
-			model_->sv_coef = Malloc(double *,m);
-			int i;
-			for(i=0;i<m;i++)
-				model_->sv_coef[i] = Malloc(double,l);
 			model_->SV = Malloc(feature_node*,l);
 			feature_node *x_space = NULL;
 			if(l>0) x_space = Malloc(feature_node,elements+model_->nSV);
@@ -3154,14 +3225,6 @@ struct model *load_model(const char *model_file_name)
 			{
 				readline(fp);
 				model_->SV[i] = &x_space[j];
-		
-				p = strtok(line, " \t");
-				model_->sv_coef[0][i] = strtod(p,&endptr);
-				for(int k=1;k<m;k++)
-				{
-					p = strtok(NULL, " \t");
-					model_->sv_coef[k][i] = strtod(p,&endptr);
-				}
 		
 				while(1)
 				{
@@ -3189,33 +3252,37 @@ struct model *load_model(const char *model_file_name)
 		}
 	}
 
-	if(!R_LS_SVM_FLAG){
-		fprintf(stderr,"failed\n");
-		nr_feature=model_->nr_feature;
-		if(model_->bias>=0)
-			n=nr_feature+1;
-		else
-			n=nr_feature;
-		int w_size = n;
-		int nr_w;
-		if(nr_class==2 && param.solver_type != MCSVM_CS)
-			nr_w = 1;
-		else
-			nr_w = nr_class;
-	
-		model_->w=Malloc(double, w_size*nr_w);
-		for(i=0; i<w_size; i++)
-		{
-			int j;
-			for(j=0; j<nr_w; j++)
-				FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
-			if (fscanf(fp, "\n") !=0)
-			{
-				fprintf(stderr, "ERROR: fscanf failed to read the model\n");
-				EXIT_LOAD_MODEL()
-			}
-		}
+	fprintf(stderr,"failed\n");
+	nr_feature=model_->nr_feature;
+	if(model_->bias>=0)
+		n=nr_feature+1;
+	else
+		n=nr_feature;
+	int w_size = n;
+	if(R_LS_SVM_FLAG)
+		w_size = m1;
+	int nr_w;
+	if(nr_class==2 && param.solver_type != MCSVM_CS)
+		nr_w = 1;
+	else
+		nr_w = nr_class;
 
+	model_->w=Malloc(double, w_size*nr_w);
+	for(i=0; i<w_size; i++)
+	{
+		int j;
+		for(j=0; j<nr_w; j++){
+			if(R_LS_SVM_FLAG)
+				for(int k = j+1; k < nr_w; k++)
+					FSCANF(fp, "%lf ", &model_->w[(j*nr_w+k-j-1)*nr_w+i]);
+			else
+				FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
+		}
+		if (fscanf(fp, "\n") !=0)
+		{
+			fprintf(stderr, "ERROR: fscanf failed to read the model\n");
+			EXIT_LOAD_MODEL()
+		}
 	}
 
 	setlocale(LC_ALL, old_locale);

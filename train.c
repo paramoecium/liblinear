@@ -125,18 +125,6 @@ int main(int argc, char **argv)
 	else
 	{
 		model_=train(&prob, &param);
-		//
-		model_->nSV = 2;
-		model_->SV = (feature_node**)malloc(model_->nSV*sizeof(feature_node*));
-		model_->SV[0] = prob.x[3];
-		model_->SV[1] = prob.x[5];
-		model_->sv_coef = (double**)malloc((model_->nr_class-1)*sizeof(double*));
-		for(int i = 0; i < model_->nr_class-1; i++){
-			model_->sv_coef[i] = (double*)malloc(model_->nSV*sizeof(double));
-			for(int j = 0; j < model_->nSV; j++)
-				model_->sv_coef[i][j] = i+j;
-		}
-		//
 		if(save_model(model_file_name, model_))
 		{
 			fprintf(stderr,"can't save model to file %s\n",model_file_name);
@@ -222,7 +210,7 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 	param.weight = NULL;
 	param.init_sol = NULL;
 	param.gamma = 0;
-	param.threshold = 0;
+	param.threshold = 0.1;
 	flag_cross_validation = 0;
 	flag_C_specified = 0;
 	flag_solver_specified = 0;
