@@ -128,6 +128,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
+		fprintf(stderr, "Before train, in train.c\n");
 		model_=train(&prob, &param);
 		if(save_model(model_file_name, model_))
 		{
@@ -215,6 +216,8 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 	param.init_sol = NULL;
 	param.gamma = 0;
 	param.threshold = 0.1;
+	param.m1 = 100;
+	param.m2 = 10;
 	flag_cross_validation = 0;
 	flag_C_specified = 0;
 	flag_solver_specified = 0;
@@ -466,11 +469,11 @@ void read_problem(const char *filename)
 		for(i=1;i<prob.l;i++)
 			(prob.x[i]-2)->index = -2;
 		x_space[j-2].index = -2;
-//			(prob.x[i]-2)->index = prob.n;
-//		x_space[j-2].index = prob.n;
 	}
 	else
 		prob.n=max_index;
+
+	fprintf(stderr,"finished read problems\n");
 
 	fclose(fp);
 }

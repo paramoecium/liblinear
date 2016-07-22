@@ -218,11 +218,13 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	int *sample_id = new int[m1];
 	feature_node **selected_x = new feature_node*[m1];
 
+	fprintf(stderr, "before random_sampling\n");
 	sample_id = random_sampling(sample_id, m1, l);
 	for(int i = 0; i < m1; i++){
 		selected_x[i] = x[sample_id[i]];
 	}
 	//bias is at the end of each x, and won't affect the kernel value
+	fprintf(stderr, "before RBF_truncate\n");
 	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma);
 
 	double *rp_arr = new double[m2*m1];
@@ -234,6 +236,7 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 		}
 	}
 	double *Q_rr = new double[l*(m2+1)]; //append bias at the end
+	fprintf(stderr, "before random projection\n");
 	Q_rr = random_projection(Q_rr, Q_r, y, l, m1, rp_arr, m2, true);
 	for(int i = 0; i < l; i++){
 		Q_rr[(m2+1)*i + m2] = prob->bias;
@@ -248,7 +251,9 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
 	double *alpha = new double[m2+1];
+	fprintf(stderr, "before solve_l2r_lr_dual\n");
 	solve_l2r_lr_dual(&mysubprob, alpha, eps, Cp, Cn);
+	fprintf(stderr, "after solve_l2r_lr_dual\n");
 	w[m1] = alpha[m2]; //weight for bias, w should be of length m1+1
 	for(int i = 0; i < m1; i++){
 		w[i] = 0;
@@ -2404,6 +2409,7 @@ static void train_one(const problem *prob, const parameter *param, double *w, do
 			solve_l2r_l1l2_svr(prob, w, param, L2R_L2LOSS_SVR_DUAL);
 			break;
 		case R_LS_SVM:
+			fprintf(stderr, "Going to solve_r_ls_svm_svc");
 			solve_r_ls_svm_svc(prob, w, param, Cp, Cn);
 			break;
 		default:
@@ -2536,6 +2542,7 @@ model* train(const problem *prob, const parameter *param)
 		else
 		{
 			if(param->solver_type == R_LS_SVM){
+				fprintf(stderr, "In R_LS_SVM\n");
 				model_->nSV = 0;
 				w_size = param->m1;
 				model_->w=Malloc(double, w_size*nr_class*(nr_class-1)/2);
@@ -2569,6 +2576,7 @@ model* train(const problem *prob, const parameter *param)
 							for(k=0;k<w_size;k++)
 								w[k] = 0;
 						
+						fprintf(stderr, "Going to trina_one function\n");
 						train_one(&sub_prob, param, w, weighted_C[i], weighted_C[j]);
 	
 						for(int k=0;k<w_size;j++)
