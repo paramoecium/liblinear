@@ -3087,9 +3087,6 @@ int save_model(const char *model_file_name, const struct model *model_)
 				fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
 		}
 		fprintf(fp, "\n");
-=======
-
->>>>>>> 31ab58d1eada462e5edee00ced3c2204a6c7ae98
 	}
 
 
