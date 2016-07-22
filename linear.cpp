@@ -125,7 +125,8 @@ public:
 	}
 };
 //TODO functions for our solver
-void solve_l2r_lr_dual(const problem *prob, double *w, double eps, double Cp, double Cn);
+static void solve_l2r_l1l2_svc(const problem *prob, double *w, double eps,
+	double Cp, double Cn, int solver_type);
 static int* random_sampling(int* sample_id, const int sample_size,
 	const int arr_size){ /*"inside-out" variant of Fisher–Yates shuffle*/
 	std::random_device rd;
@@ -251,9 +252,9 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
 	double *alpha = new double[m2+1];
-	fprintf(stderr, "before solve_l2r_lr_dual\n");
-	solve_l2r_lr_dual(&mysubprob, alpha, eps, Cp, Cn);
-	fprintf(stderr, "after solve_l2r_lr_dual\n");
+	fprintf(stderr, "before solve_l2r_l1l2_svc\n");
+	solve_l2r_l1l2_svc(&mysubprob, alpha, eps, Cp, Cn, L2R_L1LOSS_SVC_DUAL);
+	fprintf(stderr, "after solve_l2r_l1l2_svc\n");
 	w[m1] = alpha[m2]; //weight for bias, w should be of length m1+1
 	for(int i = 0; i < m1; i++){
 		w[i] = 0;
@@ -266,6 +267,7 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	delete [] sample_id;
 	delete [] rp_arr;
 	delete [] alpha;
+	fprintf(stderr, "after random projection\n");
 }
 
 class l2r_lr_fun: public function
@@ -2543,7 +2545,8 @@ model* train(const problem *prob, const parameter *param)
 		{
 			if(param->solver_type == R_LS_SVM){
 				fprintf(stderr, "In R_LS_SVM\n");
-				model_->nSV = 0;
+				model_->nSV = param->m1*nr_class*(nr_class-1)/2;
+				model_->SV = Malloc(feature_node *, model_->nSV);
 				w_size = param->m1;
 				model_->w=Malloc(double, w_size*nr_class*(nr_class-1)/2);
 				double *w=Malloc(double, w_size);

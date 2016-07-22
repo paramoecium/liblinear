@@ -37,6 +37,8 @@ struct parameter
 	double gamma;
 	int m1;		/*number of columns selected*/
 	int m2;		/*number of measurements of random projection*/
+	double m1_r;
+	double m2_r;
 	double threshold;
 };
 
