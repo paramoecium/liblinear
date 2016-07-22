@@ -82,7 +82,7 @@ public:
 			x++;
 		}
 	}
-	
+
 	static double* equals(double* output, const feature_node** x, const int l, const int n){
 		int index;
 
@@ -105,7 +105,7 @@ public:
 		for(int i = 0; i < l*n; i++)
 			if(x[i] != 0)
 				elements++;
-		
+
 		feature_node* matrix_node = (feature_node*)malloc((elements+l)*sizeof(feature_node));
 		int index = 0;
 		for(int i = 0; i < l; i++){
@@ -120,7 +120,7 @@ public:
 			matrix_node[index].index = -1;
 			index++;
 		}
-	
+
 		return output;
 	}
 };
@@ -184,12 +184,11 @@ static double* truncated_RBF(double *Q, feature_node** A,
 			}
 		}
 	}
-
 	return Q;
 }
 static double* random_projection(double* projected_matrix,
 	const double* target_matrix, const double *y, const int l, const int n,
-	const double* rp_arr, const int m){
+	const double* rp_arr, const int m, const bool SKIP_BIAS){
 	/* target_matrix = [a11,...,a1n, a21,...,a2n, ..., al1,..,aln] */
 	for(int i = 0; i < l; i++){
 		for(int j = 0; j < m; j++){
@@ -197,7 +196,11 @@ static double* random_projection(double* projected_matrix,
 			for(int k = 0; k < n; k++){
 				value += rp_arr[n*j + k] * target_matrix[n*i + k];
 			}
-			projected_matrix[m*i + j] = y[i] * value;
+			if(SKIP_BIAS){
+				projected_matrix[(m+1)*i + j] = y[i] * value;
+			} else{
+				projected_matrix[m*i + j] = y[i] * value;
+			}
 		}
 	}
 	return projected_matrix;
@@ -219,6 +222,7 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	for(int i = 0; i < m1; i++){
 		selected_x[i] = x[sample_id[i]];
 	}
+	//bias is at the end of each x, and won't affect the kernel value
 	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma);
 
 	double *rp_arr = new double[m2*m1];
@@ -226,12 +230,14 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	std::normal_distribution<double> distribution(0.0,1.0/m2); //TODO sparse rp?
 	for(int i = 0; i < m2; i++){
 		for(int j = 0; j < m1; j++){
-			*(rp_arr + i*m1 + j) = distribution(generator);
+			rp_arr[i*m1 + j] = distribution(generator);
 		}
 	}
-	double *Q_rr = new double[l*m2];
-	Q_rr = random_projection(Q_rr, Q_r, y, l, m1, rp_arr, m2);
-
+	double *Q_rr = new double[l*(m2+1)]; //append bias at the end
+	Q_rr = random_projection(Q_rr, Q_r, y, l, m1, rp_arr, m2, true);
+	for(int i = 0; i < l; i++){
+		Q_rr[(m2+1)*i + m2] = prob->bias;
+	}
 	double eps = param->eps;
 	struct problem mysubprob;
 	mysubprob.bias = 1;
@@ -241,12 +247,20 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	sparse_Q_rr = sparse_operator::equals(sparse_Q_rr, Q_rr, l, m2);
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
-	solve_l2r_lr_dual(&mysubprob, w, eps, Cp, Cn);
-
+	double *alpha = new double[m2+1];
+	solve_l2r_lr_dual(&mysubprob, alpha, eps, Cp, Cn);
+	w[m1] = alpha[m2]; //weight for bias, w should be of length m1+1
+	for(int i = 0; i < m1; i++){
+		w[i] = 0;
+		for(int j = 0; j < m2; j++){
+			w[i] += rp_arr[m1*j + i] * alpha[j];
+		}
+	}
 	delete [] Q_r;
 	delete [] Q_rr;
 	delete [] sample_id;
 	delete [] rp_arr;
+	delete [] alpha;
 }
 
 class l2r_lr_fun: public function
@@ -2437,6 +2451,11 @@ model* train(const problem *prob, const parameter *param)
 	int l = prob->l;
 	int n = prob->n;
 	int w_size = prob->n;
+	//TODO change length of w
+	if(param->solver_type == R_LS_SVM){
+		w_size = param->m1;
+	}
+
 	model *model_ = Malloc(model,1);
 
 	if(prob->bias>=0)
@@ -2518,7 +2537,6 @@ model* train(const problem *prob, const parameter *param)
 		{
 			if(param->solver_type == R_LS_SVM){
 				model_->nSV = 0;
-				//TODO
 				w_size = param->m1;
 				model_->w=Malloc(double, w_size*nr_class*(nr_class-1)/2);
 				double *w=Malloc(double, w_size);
@@ -2868,29 +2886,57 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		n=model_->nr_feature;
 	double *w=model_->w;
 	int nr_class=model_->nr_class;
-	int i;
 	int nr_w;
-	if(nr_class==2 && model_->param.solver_type != MCSVM_CS)
+	if(nr_class==2 && model_->param.solver_type != MCSVM_CS) {
 		nr_w = 1;
-	else
+	} else if (model_->param.solver_type == R_LS_SVM) {
+		nr_w = nr_class*(nr_class-1)/2;
+	} else {
 		nr_w = nr_class;
-
-	//TODO
-	if(model_->param.solver_type == R_LS_SVM){
-		return model_->label[1];
 	}
-	else{
+
+	for(int i=0;i<nr_w;i++)
+		dec_values[i] = 0;
+	//TODO compute decision value
+	if(model_->param.solver_type == R_LS_SVM){
+		int m1 = model_->param.m1;
+		double *Q_r = new double[m1];
+		//TODO get SV
+		//Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, model_->param->threshold, model_->param->gamma);
+		for(int i=0; i<nr_w; i++){
+			for(int j=0; j<m1; j++){
+				dec_values[i] += w[(m1+1)*i + j] * Q_r[j];
+			}
+			dec_values[i] += w[(m1+1)*i + m1] * model_->bias;
+		}
+		//TODO voting, maybe copy libSVM
+		int *vote = new int[nr_class];
+		for(int i=0;i<nr_class;i++)
+			vote[i] = 0;
+		int p=0;
+		for(int i=0;i<nr_class;i++){
+			for(int j=i+1;j<nr_class;j++){
+				if(dec_values[p] > 0)
+					++vote[i];
+				else
+					++vote[j];
+				p++;
+			}
+		}
+		int vote_max_idx = 0;
+		for(int i=1;i<nr_class;i++)
+			if(vote[i] > vote[vote_max_idx])
+				vote_max_idx = i;
+		return model_->label[vote_max_idx];
+	}else{
 		const feature_node *lx=x;
-		for(i=0;i<nr_w;i++)
-			dec_values[i] = 0;
 		for(; (idx=lx->index)!=-1; lx++)
 		{
 			// the dimension of testing data may exceed that of training
 			if(idx<=n)
-				for(i=0;i<nr_w;i++)
+				for(int i=0;i<nr_w;i++)
 					dec_values[i] += w[(idx-1)*nr_w+i]*lx->value;
 		}
-	
 		if(nr_class==2)
 		{
 			if(check_regression_model(model_))
@@ -2901,19 +2947,25 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		else
 		{
 			int dec_max_idx = 0;
-			for(i=1;i<nr_class;i++)
+			for(int i=1;i<nr_class;i++)
 			{
 				if(dec_values[i] > dec_values[dec_max_idx])
 					dec_max_idx = i;
 			}
 			return model_->label[dec_max_idx];
 		}
-	}	
+	}
 }
 
 double predict(const model *model_, const feature_node *x)
 {
-	double *dec_values = Malloc(double, model_->nr_class);
+	double *dec_values;
+	if (model_->param.solver_type == R_LS_SVM) {
+		dec_values = Malloc(double, model_->nr_class*(model_->nr_class)/2);
+	}
+	else {
+		dec_values = Malloc(double, model_->nr_class);
+	}
 	double label=predict_values(model_, x, dec_values);
 	free(dec_values);
 	return label;
@@ -2931,7 +2983,7 @@ double predict_probability(const struct model *model_, const struct feature_node
 		else
 			nr_w = nr_class;
 
-		double label=predict_values(model_, x, prob_estimates);
+		double label=predict_values(model_, x, prob_estimates); //TODO handle the case of ono-against-one
 		for(i=0;i<nr_w;i++)
 			prob_estimates[i]=1/(1+exp(-prob_estimates[i]));
 
@@ -3009,13 +3061,12 @@ int save_model(const char *model_file_name, const struct model *model_)
 		fprintf(fp, "threshold\n%.8g\n", param.threshold);
 		fprintf(fp, "m1\n%d\n", param.m1);
 		fprintf(fp, "m2\n%d\n", param.m2);
-		
 		fprintf(fp, "SV\n");
 		const feature_node * const *SV = model_->SV;
 		for(int i=0;i<model_->nSV;i++)
 		{
 			const feature_node *p = SV[i];
-			
+
 			while(p->index != -1 && p->index != -2)
 			{
 				fprintf(fp,"%d:%.8g ",p->index,p->value);
@@ -3036,6 +3087,9 @@ int save_model(const char *model_file_name, const struct model *model_)
 				fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
 		}
 		fprintf(fp, "\n");
+=======
+
+>>>>>>> 31ab58d1eada462e5edee00ced3c2204a6c7ae98
 	}
 
 
@@ -3192,7 +3246,7 @@ struct model *load_model(const char *model_file_name)
 		else if(strcmp(cmd,"SV")==0){
 			int elements = 0;
 			long pos = ftell(fp);
-	
+
 			max_line_len = 1024;
 			line = Malloc(char,max_line_len);
 			char *p,*endptr,*idx,*val;
@@ -3212,12 +3266,12 @@ struct model *load_model(const char *model_file_name)
 			elements += model_->nSV;
 
 			fseek(fp,pos,SEEK_SET);
-			
+
 			int l = model_->nSV;
 			model_->SV = Malloc(feature_node*,l);
 			feature_node *x_space = NULL;
 			if(l>0) x_space = Malloc(feature_node,elements+model_->nSV);
-			
+
 			readline(fp);
 
 			int j=0;
@@ -3225,17 +3279,17 @@ struct model *load_model(const char *model_file_name)
 			{
 				readline(fp);
 				model_->SV[i] = &x_space[j];
-		
+
 				while(1)
 				{
 					idx = strtok(NULL, ":");
 					val = strtok(NULL, " \t");
-		
+
 					if(val == NULL)
 						break;
 					x_space[j].index = (int) strtol(idx,&endptr,10);
 					x_space[j].value = strtod(val,&endptr);
-		
+
 					++j;
 				}
 				x_space[j].index = -2;
@@ -3252,7 +3306,6 @@ struct model *load_model(const char *model_file_name)
 		}
 	}
 
-	fprintf(stderr,"failed\n");
 	nr_feature=model_->nr_feature;
 	if(model_->bias>=0)
 		n=nr_feature+1;

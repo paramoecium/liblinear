@@ -50,6 +50,10 @@ void exit_with_help()
 	"-wi weight: weights adjust the parameter C of different classes (see README for details)\n"
 	"-v n: n-fold cross validation mode\n"
 	"-C : find parameter C (only for -s 0 and 2)\n"
+	"-g : gamma in rbf kenerl\n"
+	"-t : threshold for rbf kernel value\n"
+	"-M : m1 : size of reduced set in RSVM\n"
+	"-m : m2 : number of random measurements\n"
 	"-q : quiet mode (no outputs)\n"
 	);
 	exit(1);
@@ -281,6 +285,14 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 
 			case 't':
 				param.threshold = atof(argv[i]);
+				break;
+
+			case 'M':
+				param.m1 = atoi(argv[i]);
+				break;
+
+			case 'm':
+				param.m2 = atoi(argv[i]);
 				break;
 
 			default:
