@@ -214,7 +214,7 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 	param.weight_label = NULL;
 	param.weight = NULL;
 	param.init_sol = NULL;
-	param.gamma = 0;
+	param.gamma = 0.1;
 	param.threshold = 0.1;
 	param.m1 = 100;
 	param.m2 = 10;
@@ -369,6 +369,7 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 				break;
 			case R_LS_SVM:
 				fprintf(stdout, "successfully choose R_LS_SVM.\n");
+				param.eps = 0.1;
 				break;
 		}
 	}

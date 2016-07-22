@@ -244,10 +244,10 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	double eps = param->eps;
 	struct problem mysubprob;
 	mysubprob.bias = 1;
-	mysubprob.n = m2;
+	mysubprob.n = m2+1;
 	mysubprob.l = l;
 	feature_node** sparse_Q_rr = new feature_node*[l];
-	sparse_Q_rr = sparse_operator::equals(sparse_Q_rr, Q_rr, l, m2);
+	sparse_Q_rr = sparse_operator::equals(sparse_Q_rr, Q_rr, l, m2+1);
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
 	double *alpha = new double[m2+1];
@@ -2547,7 +2547,7 @@ model* train(const problem *prob, const parameter *param)
 				w_size = param->m1;
 				model_->w=Malloc(double, w_size*nr_class*(nr_class-1)/2);
 				double *w=Malloc(double, w_size);
-		
+
 				for(i=0;i<nr_class;i++)
 					for(j=i+1;j<nr_class;j++){
 						problem sub_prob;
@@ -2575,13 +2575,13 @@ model* train(const problem *prob, const parameter *param)
 						else
 							for(k=0;k<w_size;k++)
 								w[k] = 0;
-						
+
 						fprintf(stderr, "Going to trina_one function\n");
 						train_one(&sub_prob, param, w, weighted_C[i], weighted_C[j]);
-	
+
 						for(int k=0;k<w_size;j++)
 							model_->w[(i*nr_class+j-i-1)*nr_class+k] = w[k];
-						
+
 						free(sub_prob.x);
 						free(sub_prob.y);
 					}
