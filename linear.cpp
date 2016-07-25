@@ -92,7 +92,7 @@ public:
 		for(int i = 0; i < l; i++){
 			index = 0;
 			while(x[i][index].index != -1){
-				output[n*i + x[i][index].index] = x[i][index].value;
+				output[n*i + x[i][index].index-1] = x[i][index].value;
 				index++;
 			}
 		}
@@ -112,7 +112,7 @@ public:
 			output[i] = &matrix_node[index];
 			for(int j = 0; j < n; j++){
 				if(x[i*n+j] != 0){
-					matrix_node[index].index = j;
+					matrix_node[index].index = j+1;
 					matrix_node[index].value = x[i*n+j];
 					index++;
 				}
@@ -249,12 +249,12 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	mysubprob.bias = 1;
 	mysubprob.n = m2+1;
 	mysubprob.l = l;
-	feature_node** sparse_Q_rr = new feature_node*[l];
+//	feature_node** sparse_Q_rr = new feature_node*[l];
+	feature_node** sparse_Q_rr = (feature_node**)malloc(l*sizeof(feature_node*));
 	sparse_Q_rr = sparse_operator::equals(sparse_Q_rr, Q_rr, l, m2+1);
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
 	double *alpha = (double*)malloc((m2+1)*sizeof(double));
-	double *test = alpha;
 	solve_l2r_l1l2_svc(&mysubprob, alpha, eps, Cp, Cn, L2R_L2LOSS_SVC_DUAL);
 	fprintf(stderr, "after solve_l2r_l1l2_svc\n");
 	w[m1] = alpha[m2]; //weight for bias, w should be of length m1+1
@@ -264,9 +264,9 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 			w[i] += rp_arr[m1*j + i] * alpha[j];
 		}
 	}
-	fprintf(stderr, "after random projection\n");
+//	fprintf(stderr, "after random projection\n");
 	free(alpha);
-	fprintf(stderr, "after random projection\n");
+//	fprintf(stderr, "after random projection\n");
 	delete [] Q_r;
 	delete [] Q_rr;
 	delete [] rp_arr;
@@ -2462,10 +2462,6 @@ model* train(const problem *prob, const parameter *param)
 	int l = prob->l;
 	int n = prob->n;
 	int w_size = prob->n;
-	//TODO change length of w
-	if(param->solver_type == R_LS_SVM){
-		w_size = param->m1;
-	}
 
 	model *model_ = Malloc(model,1);
 
@@ -2565,14 +2561,13 @@ model* train(const problem *prob, const parameter *param)
 						model_->nSV += model_->cSV[p];
 						p++;
 					}
-					p++;
 				}
 				p--;
 
 				fprintf(stderr, "nSV = %d, cSV = %d\n", model_->nSV, model_->cSV[0]);
 
 				model_->SV = Malloc(feature_node *, model_->nSV);
-				model_->w=Malloc(double, p);
+				model_->w = Malloc(double, model_->nSV+(model_->nSV*(model_->nSV-1))/2);
 
 				p = 0;
 				int wp = 0;
@@ -2587,7 +2582,7 @@ model* train(const problem *prob, const parameter *param)
 						sub_prob.y = Malloc(double,sub_prob.l);
 						sub_prob.bias = prob->bias;
 
-						double *w = (double*)malloc(model_->cSV[p]*sizeof(double));
+						double *w = (double*)malloc((model_->cSV[p]+1)*sizeof(double));
 						rp_size_d = model_->cSV[p]*param->m2_r;
 						rp_size_i = (int)rp_size_d;
 
@@ -2614,7 +2609,7 @@ model* train(const problem *prob, const parameter *param)
 						solve_r_ls_svm_svc(&sub_prob, w, param, weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i);
 						fprintf(stderr, "Out of trina_one function\n");
 
-						for(int k=0;k<model_->cSV[p];k++){
+						for(int k=0;k<=model_->cSV[p];k++){
 							model_->w[wp] = w[k];
 							wp++;
 						}
@@ -2622,7 +2617,7 @@ model* train(const problem *prob, const parameter *param)
 
 						free(sub_prob.x);
 						free(sub_prob.y);
-						free(w);
+//						free(w);
 						p++;
 					}
 			}
@@ -3102,39 +3097,43 @@ int save_model(const char *model_file_name, const struct model *model_)
 	fprintf(fp, "nr_feature %d\n", nr_feature);
 
 	fprintf(fp, "bias %.16g\n", model_->bias);
+	fprintf(stderr, "cool\n");
 
 	if(param.solver_type == R_LS_SVM){
-		fprintf(fp,"gamma\n%.8g\n", param.gamma);
+		w_size = model_->nSV;
+		fprintf(fp, "gamma\n%.8g\n", param.gamma);
 		fprintf(fp, "threshold\n%.8g\n", param.threshold);
 		fprintf(fp, "m1\n%d\n", param.m1);
 		fprintf(fp, "m2\n%d\n", param.m2);
+		fprintf(fp, "nSV\n%d\n", model_->nSV);
+		fprintf(fp, "cSV\n");
+		for(i = 0; i < model_->nr_class*(model_->nr_class-1)/2; i++)
+			fprintf(fp, "%d\n", model_->cSV[i]);
+
 		fprintf(fp, "SV\n");
 		const feature_node * const *SV = model_->SV;
-		for(int i=0;i<model_->nSV;i++)
+		for(int i = 0; i < model_->nSV; i++)
 		{
 			const feature_node *p = SV[i];
 
-			while(p->index != -1 && p->index != -2)
+			while(p->index != -1)
 			{
+				if(model_->bias >= 0 && p->index == n)
+					break;
 				fprintf(fp,"%d:%.8g ",p->index,p->value);
-				p++;
 			}
 			fprintf(fp, "\n");
 		}
 	}
 	fprintf(fp, "w %d\n", w_size);
-	for(i=0; i<w_size; i++)
-	{
-		int j;
-		for(j=0; j<nr_w; j++){
-			if(param.solver_type == R_LS_SVM)
-				for(int k = j+1; k<nr_w; k++)
-					fprintf(fp, "%.16g ", model_->w[(j*nr_w+k-j-1)*nr_w+i]);
-			else
+	if(param.solver_type == R_LS_SVM)
+		for(int j = 0; j < model_->nSV; j++)
+			fprintf(fp, "%.16g ", model_->w[j]);
+	else
+		for(i=0; i<w_size; i++)
+			for(int j=0; j<nr_w; j++)
 				fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
-		}
-		fprintf(fp, "\n");
-	}
+	fprintf(fp, "\n");
 
 
 	setlocale(LC_ALL, old_locale);
@@ -3250,6 +3249,12 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"nSV")==0)
 		{
+			FSCANF(fp,"%d",&nSV);
+			model_->nSV=nSV;
+		}
+		else if(strcmp(cmd,"cSV")==0)
+		{
+			int i = nr_class*(nr_class-1)/2;
 			FSCANF(fp,"%d",&nSV);
 			model_->nSV=nSV;
 		}
