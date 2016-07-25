@@ -147,7 +147,7 @@ static int* random_sampling(int* sample_id, const int sample_size,
 	std::copy(b.begin(), b.end(), sample_id);
 	return sample_id;
 }
-static double* truncated_RBF(double *Q, feature_node** A,
+static double* truncated_RBF(double *Q, const feature_node** A,
 	feature_node** B, const int nA, const int nB, const double threshold,
 	const double gamma){
 	double d_thresh_sq = log(threshold)/-gamma;
@@ -210,6 +210,8 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	const parameter *param, double Cp, double Cn, int m1, int m2)
 {
 	int l = prob->l;
+//	int m1 = param->m1;
+//	int m2 = param->m2;
 	feature_node **x = prob->x;
 	double *y = prob->y;
 
@@ -2944,15 +2946,20 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		dec_values[i] = 0;
 	//TODO compute decision value
 	if(model_->param.solver_type == R_LS_SVM){
-		int m1 = model_->param.m1;
-		double *Q_r = new double[m1];
+		int nSV = model_->nSV;
+		double *Q_r = new double[nSV];
 		//TODO get SV
-		//Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, model_->param->threshold, model_->param->gamma);
+		feature_node **SV = model_->SV;
+		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma);
+		int w_p = 0;
 		for(int i=0; i<nr_w; i++){
-			for(int j=0; j<m1; j++){
-				dec_values[i] += w[(m1+1)*i + j] * Q_r[j];
+			int cSV_i = model_->cSV[i];
+			for(int j=0; j<cSV_i; j++){
+				dec_values[i] += w[w_p] * Q_r[w_p];
+				w_p++;
 			}
-			dec_values[i] += w[(m1+1)*i + m1] * model_->bias;
+			dec_values[i] += w[w_p] * model_->bias;
+			w_p++;
 		}
 		//TODO voting, maybe copy libSVM
 		int *vote = new int[nr_class];
@@ -3106,8 +3113,8 @@ int save_model(const char *model_file_name, const struct model *model_)
 		w_size = model_->nSV;
 		fprintf(fp, "gamma\n%.8g\n", param.gamma);
 		fprintf(fp, "threshold\n%.8g\n", param.threshold);
-		fprintf(fp, "m1\n%.8g\n", param.m1_r);
-		fprintf(fp, "m2\n%.8g\n", param.m2_r);
+		fprintf(fp, "m1\n%d\n", param.m1);
+		fprintf(fp, "m2\n%d\n", param.m2);
 		fprintf(fp, "nSV\n%d\n", model_->nSV);
 		fprintf(fp, "cSV\n");
 		for(i = 0; i < model_->nr_class*(model_->nr_class-1)/2; i++)
@@ -3130,7 +3137,7 @@ int save_model(const char *model_file_name, const struct model *model_)
 	}
 	fprintf(fp, "w %d\n", w_size);
 	if(param.solver_type == R_LS_SVM)
-		for(int j = 0; j < model_->nSV + model_->nr_class*(model_->nr_class-1)/2; j++)
+		for(int j = 0; j < model_->nSV; j++)
 			fprintf(fp, "%.16g ", model_->w[j]);
 	else
 		for(i=0; i<w_size; i++)
@@ -3198,8 +3205,7 @@ struct model *load_model(const char *model_file_name)
 	bool R_LS_SVM_FLAG = false;
 	int i;
 	int nr_feature;
-	int n;
-	double m1, m2;
+	int n, m1, m2;
 	int nr_class;
 	double bias;
 	double gamma;
@@ -3258,19 +3264,19 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"cSV")==0)
 		{
-			int total = nr_class*(nr_class-1)/2;
-			for(int i = 0; i < total; i++)
-				FSCANF(fp,"%d",&model_->cSV[i]);
+			int i = nr_class*(nr_class-1)/2;
+			FSCANF(fp,"%d",&nSV);
+			model_->nSV=nSV;
 		}
 		else if(strcmp(cmd,"m1")==0)
 		{
-			FSCANF(fp,"%lf",&m1);
-			param.m1_r=m1;
+			FSCANF(fp,"%d",&m1);
+			param.m1=m1;
 		}
 		else if(strcmp(cmd,"m2")==0)
 		{
-			FSCANF(fp,"%lf",&m2);
-			param.m2_r=m2;
+			FSCANF(fp,"%d",&m2);
+			param.m2=m2;
 		}
 		else if(strcmp(cmd,"bias")==0)
 		{
@@ -3364,27 +3370,30 @@ struct model *load_model(const char *model_file_name)
 		n=nr_feature+1;
 	else
 		n=nr_feature;
-
 	int w_size = n;
+	if(R_LS_SVM_FLAG)
+		w_size = m1;
 	int nr_w;
 	if(nr_class==2 && param.solver_type != MCSVM_CS)
 		nr_w = 1;
 	else
 		nr_w = nr_class;
-	if(R_LS_SVM_FLAG)
-		for(int j = 0; j < model_->nSV + model_->nr_class*(model_->nr_class-1)/2; j++)
-			FSCANF(fp, "%lf ", &model_->w[j]);
-	else{
-		model_->w=Malloc(double, w_size*nr_w);
-		for(i=0; i<w_size; i++)
-		{
-			for(int j=0; j<nr_w; j++)
+
+	model_->w=Malloc(double, w_size*nr_w);
+	for(i=0; i<w_size; i++)
+	{
+		int j;
+		for(j=0; j<nr_w; j++){
+			if(R_LS_SVM_FLAG)
+				for(int k = j+1; k < nr_w; k++)
+					FSCANF(fp, "%lf ", &model_->w[(j*nr_w+k-j-1)*nr_w+i]);
+			else
 				FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
-			if (fscanf(fp, "\n") !=0)
-			{
-				fprintf(stderr, "ERROR: fscanf failed to read the model\n");
-				EXIT_LOAD_MODEL()
-			}
+		}
+		if (fscanf(fp, "\n") !=0)
+		{
+			fprintf(stderr, "ERROR: fscanf failed to read the model\n");
+			EXIT_LOAD_MODEL()
 		}
 	}
 
