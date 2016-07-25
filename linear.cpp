@@ -206,7 +206,7 @@ static double* random_projection(double* projected_matrix,
 	}
 	return projected_matrix;
 }
-static void solve_r_ls_svm_svc(const problem *prob, double *w,
+static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV,
 	const parameter *param, double Cp, double Cn, int m1, int m2)
 {
 	int l = prob->l;
@@ -224,6 +224,9 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	sample_id = random_sampling(sample_id, m1, l);
 	for(int i = 0; i < m1; i++){
 		selected_x[i] = x[sample_id[i]];
+	}
+	for(int i=0; i<m1; i++){
+		SV[i] = x[sample_id[i]];
 	}
 	free(sample_id);
 	//bias is at the end of each x, and won't affect the kernel value
@@ -2233,6 +2236,7 @@ static void transpose(const problem *prob, feature_node **x_space_ret, problem *
 // perm, length l, must be allocated before calling this subroutine
 static void group_classes(const problem *prob, int *nr_class_ret, int **label_ret, int **start_ret, int **count_ret, int *perm)
 {
+	int l = prob->l;
 	int max_nr_class = 16;
 	int nr_class = 0;
 	int *label = Malloc(int,max_nr_class);
@@ -2525,7 +2529,7 @@ model* train(const problem *prob, const parameter *param)
 			sub_prob.l = l;
 			sub_prob.n = n;
 			sub_prob.x = Malloc(feature_node *,sub_prob.l);
-			sub_prob.y = Malloc(double,sub_prob.l);
+			sub_prob.y = Malloc(double, sub_prob.l);
 
 			for(k=0; k<sub_prob.l; k++)
 				sub_prob.x[k] = x[k];
@@ -2546,8 +2550,8 @@ model* train(const problem *prob, const parameter *param)
 				double r_size_d, rp_size_d;
 				int rp_size_i;
 				model_->nSV = 0;
-				model_->cSV = (int*)malloc(nr_class*(nr_class-1)/2*sizeof(int));
-				
+				model_->cSV = (int*)Malloc(int, nr_class*(nr_class-1)/2);
+
 				int p = 0;
 				for(i=0;i<nr_class;i++){
 					for(j=i+1;j<nr_class;j++){
@@ -2561,7 +2565,6 @@ model* train(const problem *prob, const parameter *param)
 						p++;
 					}
 				}
-				p--;
 
 				fprintf(stderr, "nSV = %d, cSV = %d\n", model_->nSV, model_->cSV[0]);
 
@@ -2569,6 +2572,7 @@ model* train(const problem *prob, const parameter *param)
 				model_->w = Malloc(double, model_->nSV+(model_->nSV*(model_->nSV-1))/2);
 
 				p = 0;
+				int SV_begin = 0;
 				int wp = 0;
 				for(i=0;i<nr_class;i++)
 					for(j=i+1;j<nr_class;j++){
@@ -2603,10 +2607,12 @@ model* train(const problem *prob, const parameter *param)
 						else
 							for(k=0;k<model_->cSV[p];k++)
 								w[k] = 0;
-
 						fprintf(stderr, "Going to trina_one function\n");
-						solve_r_ls_svm_svc(&sub_prob, w, param, weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i);
+						//TODO where we call solve_r_ls_svm_svc
+						solve_r_ls_svm_svc(&sub_prob, w, &model_->SV[SV_begin], param,
+							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i);
 						fprintf(stderr, "Out of trina_one function\n");
+						SV_begin += model_->cSV[p];
 
 						for(int k=0;k<=model_->cSV[p];k++){
 							model_->w[wp] = w[k];
