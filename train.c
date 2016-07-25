@@ -25,6 +25,7 @@ void exit_with_help()
 	"	 5 -- L1-regularized L2-loss support vector classification\n"
 	"	 6 -- L1-regularized logistic regression\n"
 	"	 7 -- L2-regularized logistic regression (dual)\n"
+	"	 8 -- R_LS_SVM model\n"
 	"  for regression\n"
 	"	11 -- L2-regularized L2-loss support vector regression (primal)\n"
 	"	12 -- L2-regularized L2-loss support vector regression (dual)\n"
@@ -52,8 +53,8 @@ void exit_with_help()
 	"-C : find parameter C (only for -s 0 and 2)\n"
 	"-g : gamma in rbf kenerl\n"
 	"-t : threshold for rbf kernel value\n"
-	"-M : m1 : size of reduced set in RSVM\n"
-	"-m : m2 : number of random measurements\n"
+	"-M : m1 : ratio of reduced set in RSVM\n"
+	"-m : m2 : ratio of random measurements\n"
 	"-q : quiet mode (no outputs)\n"
 	);
 	exit(1);
@@ -216,8 +217,8 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 	param.init_sol = NULL;
 	param.gamma = 0.1;
 	param.threshold = 0.1;
-	param.m1 = 100;
-	param.m2 = 10;
+	param.m1_r = 0.01;
+	param.m2_r = 0.1;
 	flag_cross_validation = 0;
 	flag_C_specified = 0;
 	flag_solver_specified = 0;
@@ -291,11 +292,11 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 				break;
 
 			case 'M':
-				param.m1 = atoi(argv[i]);
+				param.m1_r = atof(argv[i]);
 				break;
 
 			case 'm':
-				param.m2 = atoi(argv[i]);
+				param.m2_r = atof(argv[i]);
 				break;
 
 			default:
@@ -468,8 +469,8 @@ void read_problem(const char *filename)
 	{
 		prob.n=max_index+1;
 		for(i=1;i<prob.l;i++)
-			(prob.x[i]-2)->index = -2;
-		x_space[j-2].index = -2;
+			(prob.x[i]-2)->index = prob.n;
+		x_space[j-2].index = prob.n;
 	}
 	else
 		prob.n=max_index;

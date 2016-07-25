@@ -37,8 +37,8 @@ struct parameter
 	double gamma;
 	int m1;		/*number of columns selected*/
 	int m2;		/*number of measurements of random projection*/
-	double m1_r;
-	double m2_r;
+	double m1_r;/* ratio of reduced set */
+	double m2_r;/* ratio of random projection */
 	double threshold;
 };
 
@@ -52,6 +52,7 @@ struct model
 	double bias;
 	//TODO
 	int nSV;
+	int *cSV;
 	struct feature_node **SV;
 };
 

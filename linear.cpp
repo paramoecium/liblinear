@@ -112,7 +112,7 @@ public:
 			output[i] = &matrix_node[index];
 			for(int j = 0; j < n; j++){
 				if(x[i*n+j] != 0){
-					matrix_node[index].index = i*n+j;
+					matrix_node[index].index = j;
 					matrix_node[index].value = x[i*n+j];
 					index++;
 				}
@@ -207,16 +207,17 @@ static double* random_projection(double* projected_matrix,
 	return projected_matrix;
 }
 static void solve_r_ls_svm_svc(const problem *prob, double *w,
-	const parameter *param, double Cp, double Cn)
+	const parameter *param, double Cp, double Cn, int m1, int m2)
 {
 	int l = prob->l;
-	int m1 = param->m1;
-	int m2 = param->m2;
+//	int m1 = param->m1;
+//	int m2 = param->m2;
 	feature_node **x = prob->x;
 	double *y = prob->y;
 
 	double *Q_r = new double[l*m1]; //TODO make it stored in sparse form
-	int *sample_id = new int[m1];
+//	int *sample_id = new int[m1];
+	int *sample_id = (int*)malloc(m1*sizeof(int));
 	feature_node **selected_x = new feature_node*[m1];
 
 	fprintf(stderr, "before random_sampling\n");
@@ -224,6 +225,7 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	for(int i = 0; i < m1; i++){
 		selected_x[i] = x[sample_id[i]];
 	}
+	free(sample_id);
 	//bias is at the end of each x, and won't affect the kernel value
 	fprintf(stderr, "before RBF_truncate\n");
 	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma);
@@ -251,9 +253,9 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 	sparse_Q_rr = sparse_operator::equals(sparse_Q_rr, Q_rr, l, m2+1);
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
-	double *alpha = new double[m2+1];
-	fprintf(stderr, "before solve_l2r_l1l2_svc\n");
-	solve_l2r_l1l2_svc(&mysubprob, alpha, eps, Cp, Cn, L2R_L1LOSS_SVC_DUAL);
+	double *alpha = (double*)malloc((m2+1)*sizeof(double));
+	double *test = alpha;
+	solve_l2r_l1l2_svc(&mysubprob, alpha, eps, Cp, Cn, L2R_L2LOSS_SVC_DUAL);
 	fprintf(stderr, "after solve_l2r_l1l2_svc\n");
 	w[m1] = alpha[m2]; //weight for bias, w should be of length m1+1
 	for(int i = 0; i < m1; i++){
@@ -262,12 +264,12 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w,
 			w[i] += rp_arr[m1*j + i] * alpha[j];
 		}
 	}
+	fprintf(stderr, "after random projection\n");
+	free(alpha);
+	fprintf(stderr, "after random projection\n");
 	delete [] Q_r;
 	delete [] Q_rr;
-	delete [] sample_id;
 	delete [] rp_arr;
-	delete [] alpha;
-	fprintf(stderr, "after random projection\n");
 }
 
 class l2r_lr_fun: public function
@@ -1018,6 +1020,7 @@ static void solve_l2r_l1l2_svc(
 
 	for(i=0; i<w_size; i++)
 		w[i] = 0;
+	fprintf(stderr, "In solve_l2r_l1l2_svc, w_size = m2+1 = %d, l = %d\n", w_size, l);
 	for(i=0; i<l; i++)
 	{
 		QD[i] = diag[GETI(i)];
@@ -2412,7 +2415,7 @@ static void train_one(const problem *prob, const parameter *param, double *w, do
 			break;
 		case R_LS_SVM:
 			fprintf(stderr, "Going to solve_r_ls_svm_svc");
-			solve_r_ls_svm_svc(prob, w, param, Cp, Cn);
+//			solve_r_ls_svm_svc(prob, w, param, Cp, Cn);
 			break;
 		default:
 			fprintf(stderr, "ERROR: unknown solver_type\n");
@@ -2544,13 +2547,35 @@ model* train(const problem *prob, const parameter *param)
 		else
 		{
 			if(param->solver_type == R_LS_SVM){
-				fprintf(stderr, "In R_LS_SVM\n");
-				model_->nSV = param->m1*nr_class*(nr_class-1)/2;
-				model_->SV = Malloc(feature_node *, model_->nSV);
-				w_size = param->m1;
-				model_->w=Malloc(double, w_size*nr_class*(nr_class-1)/2);
-				double *w=Malloc(double, w_size);
+				fprintf(stderr, "In R_LS_SVM, class_nr = %d\n", nr_class);
+				double r_size_d, rp_size_d;
+				int rp_size_i;
+				model_->nSV = 0;
+				model_->cSV = (int*)malloc(nr_class*(nr_class-1)/2*sizeof(int));
+				
+				int p = 0;
+				for(i=0;i<nr_class;i++){
+					for(j=i+1;j<nr_class;j++){
+						int ci = count[i], cj = count[j];
+						r_size_d = (ci+cj)*param->m1_r;
+						if((int)r_size_d == 0)
+							model_->cSV[p] = ci+cj;
+						else
+							model_->cSV[p] = (int)r_size_d;
+						model_->nSV += model_->cSV[p];
+						p++;
+					}
+					p++;
+				}
+				p--;
 
+				fprintf(stderr, "nSV = %d, cSV = %d\n", model_->nSV, model_->cSV[0]);
+
+				model_->SV = Malloc(feature_node *, model_->nSV);
+				model_->w=Malloc(double, p);
+
+				p = 0;
+				int wp = 0;
 				for(i=0;i<nr_class;i++)
 					for(j=i+1;j<nr_class;j++){
 						problem sub_prob;
@@ -2560,6 +2585,12 @@ model* train(const problem *prob, const parameter *param)
 						sub_prob.n = n;
 						sub_prob.x = Malloc(feature_node *,sub_prob.l);
 						sub_prob.y = Malloc(double,sub_prob.l);
+						sub_prob.bias = prob->bias;
+
+						double *w = (double*)malloc(model_->cSV[p]*sizeof(double));
+						rp_size_d = model_->cSV[p]*param->m2_r;
+						rp_size_i = (int)rp_size_d;
+
 						int k;
 						for(k=0;k<ci;k++)
 						{
@@ -2573,22 +2604,27 @@ model* train(const problem *prob, const parameter *param)
 						}
 
 						if(param->init_sol != NULL)
-							for(int k=0;k<w_size;k++)
-								w[k] = param->init_sol[(i*nr_class+j-i-1)*nr_class+k];
+							for(int k=0;k<model_->cSV[p];k++)
+								w[k] = param->init_sol[p];
 						else
-							for(k=0;k<w_size;k++)
+							for(k=0;k<model_->cSV[p];k++)
 								w[k] = 0;
 
 						fprintf(stderr, "Going to trina_one function\n");
-						train_one(&sub_prob, param, w, weighted_C[i], weighted_C[j]);
+						solve_r_ls_svm_svc(&sub_prob, w, param, weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i);
+						fprintf(stderr, "Out of trina_one function\n");
 
-						for(int k=0;k<w_size;j++)
-							model_->w[(i*nr_class+j-i-1)*nr_class+k] = w[k];
+						for(int k=0;k<model_->cSV[p];k++){
+							model_->w[wp] = w[k];
+							wp++;
+						}
+						fprintf(stderr, "save w successfully\n");
 
 						free(sub_prob.x);
 						free(sub_prob.y);
+						free(w);
+						p++;
 					}
-				free(w);
 			}
 			else if(nr_class == 2)
 			{
@@ -3474,6 +3510,13 @@ const char *check_parameter(const problem *prob, const parameter *param)
 	if(param->init_sol != NULL
 		&& param->solver_type != L2R_LR && param->solver_type != L2R_L2LOSS_SVC)
 		return "Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC";
+
+	if(param->solver_type == R_LS_SVM){
+		if(param->m1_r > 1 || param->m1_r <= 0)
+			return "M must between (0, 1]";
+		if(param->m2_r > 1 || param->m2_r <= 0)
+			return "m must between (0, 1]";
+	}
 
 	return NULL;
 }
