@@ -2233,7 +2233,6 @@ static void transpose(const problem *prob, feature_node **x_space_ret, problem *
 // perm, length l, must be allocated before calling this subroutine
 static void group_classes(const problem *prob, int *nr_class_ret, int **label_ret, int **start_ret, int **count_ret, int *perm)
 {
-	int l = prob->l;
 	int max_nr_class = 16;
 	int nr_class = 0;
 	int *label = Malloc(int,max_nr_class);
