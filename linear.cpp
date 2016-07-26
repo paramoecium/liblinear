@@ -151,6 +151,7 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 	const feature_node* const * B, const int nA, const int nB, const double threshold,
 	const double gamma){
 	double d_thresh_sq = log(threshold)/-gamma;
+	int truncate_count = 0;
 	for(int i=0; i<nA; i++){
 		const feature_node* xa = A[i];
 		for(int j=0; j<nB; j++){
@@ -182,9 +183,12 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 			}
 			if(sum > d_thresh_sq){
 				Q[nB*i + j] = exp(-gamma*sum);
+			}else{
+				truncate_count++;
 			}
 		}
 	}
+	fprintf(stderr, "In truncated_RBF, %.2f%% entries are truncated.\n", (double)truncate_count/nA*nB);
 	return Q;
 }
 static double* random_projection(double* projected_matrix,
@@ -217,7 +221,7 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 
 	double *Q_r = new double[l*m1]; //TODO make it stored in sparse form
 //	int *sample_id = new int[m1];
-	int *sample_id = (int*)malloc(m1*sizeof(int));
+	int *sample_id = (int*)Malloc(int, m1);
 	feature_node **selected_x = new feature_node*[m1];
 
 	fprintf(stderr, "before random_sampling\n");
@@ -3264,7 +3268,6 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"cSV")==0)
 		{
-			int i = nr_class*(nr_class-1)/2;
 			FSCANF(fp,"%d",&nSV);
 			model_->nSV=nSV;
 		}
