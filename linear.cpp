@@ -106,7 +106,7 @@ public:
 			if(x[i] != 0)
 				elements++;
 
-		feature_node* matrix_node = (feature_node*)malloc((elements+l)*sizeof(feature_node));
+		feature_node* matrix_node = (feature_node*)Malloc(feature_node, elements+l);
 		int index = 0;
 		for(int i = 0; i < l; i++){
 			output[i] = &matrix_node[index];
@@ -188,7 +188,9 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 			}
 		}
 	}
-	fprintf(stderr, "In truncated_RBF, %.2f%% entries are truncated.\n", (double)truncate_count/nA*nB);
+	if(nA>1) {
+		fprintf(stderr, "In truncated_RBF, %.2f%% entries are truncated.\n", (double)truncate_count/nA*nB);
+	}
 	return Q;
 }
 static double* random_projection(double* projected_matrix,
@@ -257,11 +259,11 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	mysubprob.n = m2+1;
 	mysubprob.l = l;
 //	feature_node** sparse_Q_rr = new feature_node*[l];
-	feature_node** sparse_Q_rr = (feature_node**)malloc(l*sizeof(feature_node*));
+	feature_node** sparse_Q_rr = (feature_node**)Malloc(feature_node*, l);
 	sparse_Q_rr = sparse_operator::equals(sparse_Q_rr, Q_rr, l, m2+1);
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
-	double *alpha = (double*)malloc((m2+1)*sizeof(double));
+	double *alpha = (double*)Malloc(double, m2+1);
 	solve_l2r_l1l2_svc(&mysubprob, alpha, eps, Cp, Cn, L2R_L2LOSS_SVC_DUAL);
 	fprintf(stderr, "after solve_l2r_l1l2_svc\n");
 	w[m1] = alpha[m2]; //weight for bias, w should be of length m1+1
@@ -2589,7 +2591,7 @@ model* train(const problem *prob, const parameter *param)
 						sub_prob.y = Malloc(double,sub_prob.l);
 						sub_prob.bias = prob->bias;
 
-						double *w = (double*)malloc((model_->cSV[p]+1)*sizeof(double));
+						double *w = (double*)Malloc(double, model_->cSV[p]+1);
 						rp_size_d = model_->cSV[p]*param->m2_r;
 						rp_size_i = (int)rp_size_d;
 
@@ -2626,7 +2628,7 @@ model* train(const problem *prob, const parameter *param)
 
 						free(sub_prob.x);
 						free(sub_prob.y);
-						free(w);
+//						free(w);
 						p++;
 					}
 			}
@@ -3271,7 +3273,7 @@ struct model *load_model(const char *model_file_name)
 		else if(strcmp(cmd,"cSV")==0)
 		{
 			int i = nr_class*(nr_class-1)/2;
-			model_->cSV = (int*)malloc(i*sizeof(int));
+			model_->cSV = (int*)Malloc(int, i);
 			for(int j = 0; j < i; j++)
 				FSCANF(fp,"%d",&model_->cSV[j]);
 		}
