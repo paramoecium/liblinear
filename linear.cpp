@@ -3133,7 +3133,6 @@ int save_model(const char *model_file_name, const struct model *model_)
 			int	index = 0;
 			while(p != NULL && p[index].index != -1)
 			{
-				fprintf(stderr, "%d ", index);
 				if(model_->bias >= 0 && p[index].index == n)
 					break;
 				fprintf(fp,"%d:%.8g ",p[index].index,p[index].value);
@@ -3271,8 +3270,10 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"cSV")==0)
 		{
-			FSCANF(fp,"%d",&nSV);
-			model_->nSV=nSV;
+			int i = nr_class*(nr_class-1)/2;
+			model_->cSV = (int*)malloc(i*sizeof(int));
+			for(int j = 0; j < i; j++)
+				FSCANF(fp,"%d",&model_->cSV[j]);
 		}
 		else if(strcmp(cmd,"m1")==0)
 		{
