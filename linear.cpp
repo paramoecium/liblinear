@@ -147,8 +147,8 @@ static int* random_sampling(int* sample_id, const int sample_size,
 	std::copy(b.begin(), b.end(), sample_id);
 	return sample_id;
 }
-static double* truncated_RBF(double *Q, const feature_node** A,
-	feature_node** B, const int nA, const int nB, const double threshold,
+static double* truncated_RBF(double *Q, const feature_node* const * A,
+	const feature_node* const * B, const int nA, const int nB, const double threshold,
 	const double gamma){
 	double d_thresh_sq = log(threshold)/-gamma;
 	for(int i=0; i<nA; i++){
