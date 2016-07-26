@@ -2966,7 +2966,9 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 			}
 			dec_values[i] += w[w_p] * model_->bias;
 			w_p++;
+			fprintf(stderr, "%.2f ",dec_values[i]);
 		}
+		fprintf(stderr, "\n");
 		//TODO voting, maybe copy libSVM
 		int *vote = new int[nr_class];
 		for(int i=0;i<nr_class;i++)
@@ -3019,7 +3021,7 @@ double predict(const model *model_, const feature_node *x)
 {
 	double *dec_values;
 	if (model_->param.solver_type == R_LS_SVM) {
-		dec_values = Malloc(double, model_->nr_class*(model_->nr_class)/2);
+		dec_values = Malloc(double, model_->nr_class*(model_->nr_class-1)/2);
 	}
 	else {
 		dec_values = Malloc(double, model_->nr_class);
