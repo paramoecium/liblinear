@@ -3116,18 +3116,17 @@ int save_model(const char *model_file_name, const struct model *model_)
 	fprintf(fp, "nr_feature %d\n", nr_feature);
 
 	fprintf(fp, "bias %.16g\n", model_->bias);
-	fprintf(stderr, "cool\n");
 
 	if(param.solver_type == R_LS_SVM){
-		w_size = model_->nSV;
+		w_size = model_->nSV+(model_->nr_class-1)*model_->nr_class/2;
 		fprintf(fp, "gamma\n%.8g\n", param.gamma);
 		fprintf(fp, "threshold\n%.8g\n", param.threshold);
-		fprintf(fp, "m1\n%d\n", param.m1);
-		fprintf(fp, "m2\n%d\n", param.m2);
 		fprintf(fp, "nSV\n%d\n", model_->nSV);
-		fprintf(fp, "cSV\n");
+		fprintf(fp, "cSV");
 		for(i = 0; i < model_->nr_class*(model_->nr_class-1)/2; i++)
-			fprintf(fp, "%d\n", model_->cSV[i]);
+			fprintf(fp, " %d", model_->cSV[i]);
+		fprintf(fp, "\n");
+
 
 		fprintf(fp, "SV\n");
 		const feature_node * const *SV = model_->SV;
@@ -3146,9 +3145,9 @@ int save_model(const char *model_file_name, const struct model *model_)
 			fprintf(fp, "\n");
 		}
 	}
-	fprintf(fp, "w %d\n", w_size);
+	fprintf(fp, "w\n");
 	if(param.solver_type == R_LS_SVM)
-		for(int j = 0; j < model_->nSV; j++)
+		for(int j = 0; j < model_->nSV+(model_->nr_class*(model_->nr_class-1)/2); j++)
 			fprintf(fp, "%.16g ", model_->w[j]);
 	else
 		for(i=0; i<w_size; i++)
@@ -3216,7 +3215,7 @@ struct model *load_model(const char *model_file_name)
 	bool R_LS_SVM_FLAG = false;
 	int i;
 	int nr_feature;
-	int n, m1, m2;
+	int n;
 	int nr_class;
 	double bias;
 	double gamma;
@@ -3276,19 +3275,9 @@ struct model *load_model(const char *model_file_name)
 		else if(strcmp(cmd,"cSV")==0)
 		{
 			int i = nr_class*(nr_class-1)/2;
-			model_->cSV = (int*)Malloc(int, i);
+			model_->cSV = (int*)malloc(i*sizeof(int));
 			for(int j = 0; j < i; j++)
 				FSCANF(fp,"%d",&model_->cSV[j]);
-		}
-		else if(strcmp(cmd,"m1")==0)
-		{
-			FSCANF(fp,"%d",&m1);
-			param.m1=m1;
-		}
-		else if(strcmp(cmd,"m2")==0)
-		{
-			FSCANF(fp,"%d",&m2);
-			param.m2=m2;
 		}
 		else if(strcmp(cmd,"bias")==0)
 		{
@@ -3297,6 +3286,7 @@ struct model *load_model(const char *model_file_name)
 		}
 		else if(strcmp(cmd,"w")==0)
 		{
+			fprintf(stderr, "w\n");
 			break;
 		}
 		else if(strcmp(cmd,"label")==0)
@@ -3363,12 +3353,11 @@ struct model *load_model(const char *model_file_name)
 
 					++j;
 				}
-				x_space[j].index = -2;
+				x_space[j].index = nr_feature+1;
 				x_space[j++].value = model_->bias;
 				x_space[j++].index = -1;
 			}
 			free(line);
-			break;
 		}
 		else
 		{
@@ -3383,31 +3372,33 @@ struct model *load_model(const char *model_file_name)
 	else
 		n=nr_feature;
 	int w_size = n;
-	if(R_LS_SVM_FLAG)
-		w_size = m1;
 	int nr_w;
 	if(nr_class==2 && param.solver_type != MCSVM_CS)
 		nr_w = 1;
+	else if(R_LS_SVM_FLAG)
+		nr_w = nr_class*(nr_class-1)/2;
 	else
 		nr_w = nr_class;
 
-	model_->w=Malloc(double, w_size*nr_w);
-	for(i=0; i<w_size; i++)
-	{
-		int j;
-		for(j=0; j<nr_w; j++){
-			if(R_LS_SVM_FLAG)
-				for(int k = j+1; k < nr_w; k++)
-					FSCANF(fp, "%lf ", &model_->w[(j*nr_w+k-j-1)*nr_w+i]);
-			else
-				FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
-		}
-		if (fscanf(fp, "\n") !=0)
+	if(!R_LS_SVM_FLAG)
+		model_->w = Malloc(double, w_size*nr_w);
+	else 
+		model_->w = Malloc(double, nr_w+model_->nSV);
+
+	if(R_LS_SVM_FLAG)
+		for(int k = 0; k < nr_w+model_->nSV; k++)
+			FSCANF(fp, "%lf ", &model_->w[k]);
+	else
+		for(i=0; i<w_size; i++)
 		{
-			fprintf(stderr, "ERROR: fscanf failed to read the model\n");
-			EXIT_LOAD_MODEL()
+			for(int j=0; j<nr_w; j++)
+				FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
+			if (fscanf(fp, "\n") !=0)
+			{
+				fprintf(stderr, "ERROR: fscanf failed to read the model\n");
+				EXIT_LOAD_MODEL()
+			}
 		}
-	}
 
 	setlocale(LC_ALL, old_locale);
 	free(old_locale);
