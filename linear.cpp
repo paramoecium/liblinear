@@ -2622,7 +2622,7 @@ model* train(const problem *prob, const parameter *param)
 
 						free(sub_prob.x);
 						free(sub_prob.y);
-//						free(w);
+						free(w);
 						p++;
 					}
 			}
@@ -3126,11 +3126,14 @@ int save_model(const char *model_file_name, const struct model *model_)
 		{
 			const feature_node *p = SV[i];
 
-			while(p->index != -1)
+			int	index = 0;
+			while(p != NULL && p[index].index != -1)
 			{
-				if(model_->bias >= 0 && p->index == n)
+				fprintf(stderr, "%d ", index);
+				if(model_->bias >= 0 && p[index].index == n)
 					break;
-				fprintf(fp,"%d:%.8g ",p->index,p->value);
+				fprintf(fp,"%d:%.8g ",p[index].index,p[index].value);
+				index++;
 			}
 			fprintf(fp, "\n");
 		}
