@@ -189,7 +189,8 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 		}
 	}
 	if(nA>1) {
-		fprintf(stderr, "In truncated_RBF, %.2f%% entries are truncated.\n", (double)truncate_count/nA*nB);
+		fprintf(stderr, "thresh = %.2f, %.4f%% entries of Q are truncated.\n",
+			threshold, truncate_count/(double)(nA*nB));
 	}
 	return Q;
 }
