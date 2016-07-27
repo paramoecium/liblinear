@@ -187,9 +187,9 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 			}else{
 				truncate_count++;
 			}
-			fprintf(stderr,"%.2f ", Q[nB*i + j]);
+			//fprintf(stderr,"%.2f ", Q[nB*i + j]);
 		}
-		fprintf(stderr,"\n");
+		//fprintf(stderr,"\n");
 	}
 
 	if(nA>1) {
