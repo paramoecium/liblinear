@@ -148,14 +148,14 @@ static int* random_sampling(int* sample_id, const int sample_size,
 	return sample_id;
 }
 static double* truncated_RBF(double *Q, const feature_node* const * A,
-	const feature_node* const * B, const int nA, const int nB, const double threshold,
-	const double gamma){
+	const feature_node* const * B, const int nA, const int nB,
+	const double threshold, const double gamma){
 	fprintf(stderr,"nA=%d, nB=%d\n", nA, nB);
 	double d_thresh_sq = log(threshold)/-gamma;
 	int truncate_count = 0;
 	for(int i=0; i<nA; i++){
-		const feature_node* xa = A[i];
 		for(int j=0; j<nB; j++){
+			const feature_node* xa = A[i];
 			const feature_node* xb = B[j];
 			double sum = 0;
 			while(xa->index != -1 && xb->index != -1){
@@ -182,7 +182,7 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 				sum += xb->value * xb->value;
 				++xb;
 			}
-			if(sum < d_thresh_sq){
+			if(sum >= d_thresh_sq){
 				Q[nB*i + j] = exp(-gamma*sum);
 			}else{
 				truncate_count++;
@@ -194,7 +194,9 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 
 	if(nA>1) {
 		fprintf(stderr, "thresh = %.2f, %.4f%% entries of Q are truncated.\n",
-			threshold, truncate_count/(double)(nA*nB));
+			threshold, truncate_count*100/(double)(nA*nB));
+		fprintf(stderr, "d_thresh = %.2f, gamma = %.2f\n", sqrt(d_thresh_sq)
+			, gamma);
 	}
 	return Q;
 }
