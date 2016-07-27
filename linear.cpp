@@ -150,6 +150,7 @@ static int* random_sampling(int* sample_id, const int sample_size,
 static double* truncated_RBF(double *Q, const feature_node* const * A,
 	const feature_node* const * B, const int nA, const int nB, const double threshold,
 	const double gamma){
+	fprintf(stderr,"nA=%d, nB=%d\n", nA, nB);
 	double d_thresh_sq = log(threshold)/-gamma;
 	int truncate_count = 0;
 	for(int i=0; i<nA; i++){
@@ -181,13 +182,16 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 				sum += xb->value * xb->value;
 				++xb;
 			}
-			if(sum > d_thresh_sq){
+			if(sum < d_thresh_sq){
 				Q[nB*i + j] = exp(-gamma*sum);
 			}else{
 				truncate_count++;
 			}
+			fprintf(stderr,"%.2f ", Q[nB*i + j]);
 		}
+		fprintf(stderr,"\n");
 	}
+
 	if(nA>1) {
 		fprintf(stderr, "thresh = %.2f, %.4f%% entries of Q are truncated.\n",
 			threshold, truncate_count/(double)(nA*nB));
@@ -3387,7 +3391,7 @@ struct model *load_model(const char *model_file_name)
 
 	if(!R_LS_SVM_FLAG)
 		model_->w = Malloc(double, w_size*nr_w);
-	else 
+	else
 		model_->w = Malloc(double, nr_w+model_->nSV);
 
 	if(R_LS_SVM_FLAG)
