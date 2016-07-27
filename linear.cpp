@@ -2958,6 +2958,11 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		//TODO get SV
 		feature_node **SV = model_->SV;
 		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma);
+/*		for(int index = 0; ;index++){
+			if(x[index].index == -1)
+				break;
+			fprintf(stderr,"%d:%.2f ",x[index].index, x[index].value);
+		}*/
 		int w_p = 0;
 		for(int i=0; i<nr_w; i++){
 			int cSV_i = model_->cSV[i];
@@ -2967,7 +2972,7 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 			}
 			dec_values[i] += w[w_p] * model_->bias;
 			w_p++;
-			fprintf(stderr, "%.2f ",dec_values[i]);
+//			fprintf(stderr, "%lf ",dec_values[i]);
 		}
 		fprintf(stderr, "\n");
 		//TODO voting, maybe copy libSVM
