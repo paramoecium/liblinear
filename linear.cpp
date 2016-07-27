@@ -2576,7 +2576,7 @@ model* train(const problem *prob, const parameter *param)
 				fprintf(stderr, "nSV = %d, cSV = %d\n", model_->nSV, model_->cSV[0]);
 
 				model_->SV = Malloc(feature_node *, model_->nSV);
-				model_->w = Malloc(double, model_->nSV+(model_->nSV*(model_->nSV-1))/2);
+				model_->w = Malloc(double, model_->nSV+(model_->nr_class*(model_->nr_class-1))/2);
 
 				p = 0;
 				int SV_begin = 0;
@@ -2612,7 +2612,7 @@ model* train(const problem *prob, const parameter *param)
 							for(int k=0;k<model_->cSV[p];k++)
 								w[k] = param->init_sol[p];
 						else
-							for(k=0;k<model_->cSV[p];k++)
+							for(k=0;k<=model_->cSV[p];k++)
 								w[k] = 0;
 						fprintf(stderr, "Going to trina_one function\n");
 						//TODO where we call solve_r_ls_svm_svc
@@ -2629,7 +2629,7 @@ model* train(const problem *prob, const parameter *param)
 
 						free(sub_prob.x);
 						free(sub_prob.y);
-//						free(w);
+						free(w);
 						p++;
 					}
 			}
@@ -2974,7 +2974,7 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 			w_p++;
 //			fprintf(stderr, "%lf ",dec_values[i]);
 		}
-		fprintf(stderr, "\n");
+//		fprintf(stderr, "\n");
 		//TODO voting, maybe copy libSVM
 		int *vote = new int[nr_class];
 		for(int i=0;i<nr_class;i++)
