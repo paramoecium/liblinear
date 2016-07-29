@@ -192,7 +192,7 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 
 	if(nA>1) {
 		fprintf(stderr, "thresh = %lf, %.4f %% entries of Q are truncated.\n",
-			threshold, truncate_count*100/(double)(nA*nB));
+			threshold, (double)truncate_count*100/(double)(nA*nB));
 		fprintf(stderr, "d_thresh = %.4f, gamma = %.2f\n", sqrt(d_thresh_sq)
 			, gamma);
 	}
@@ -236,7 +236,6 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	for(int i = 0; i < m1; i++){
 		SV[i] = x[sample_id[i]];
 	}
-	free(sample_id);
 	//bias is at the end of each x, and won't affect the kernel value
 	fprintf(stderr, "before RBF_truncate\n");
 	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma);
@@ -260,24 +259,23 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	mysubprob.bias = 1;
 	mysubprob.n = m2+1;
 	mysubprob.l = l;
-//	feature_node** sparse_Q_rr = new feature_node*[l];
 	feature_node** sparse_Q_rr = (feature_node**)Malloc(feature_node*, l);
 	sparse_Q_rr = sparse_operator::equals(sparse_Q_rr, Q_rr, l, m2+1);
 	mysubprob.x = sparse_Q_rr;
 	mysubprob.y = prob->y;
 	double *alpha = (double*)Malloc(double, m2+1);
 	solve_l2r_l1l2_svc(&mysubprob, alpha, eps, Cp, Cn, L2R_L2LOSS_SVC_DUAL);
-	fprintf(stderr, "after solve_l2r_l1l2_svc\n");
+//	fprintf(stderr, "after solve_l2r_l1l2_svc\n");
 	w[m1] = alpha[m2]; //weight for bias, w should be of length m1+1
 	for(int i = 0; i < m1; i++){
 		w[i] = 0;
 		for(int j = 0; j < m2; j++){
 			w[i] += rp_arr[m1*j + i] * alpha[j];
 		}
+		w[i] = w[i]*y[sample_id[i]];
 	}
-//	fprintf(stderr, "after random projection\n");
+	free(sample_id);
 	free(alpha);
-//	fprintf(stderr, "after random projection\n");
 	delete [] Q_r;
 	delete [] Q_rr;
 	delete [] rp_arr;
@@ -2960,18 +2958,12 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		//TODO get SV
 		feature_node **SV = model_->SV;
 		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma);
-//		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, 0, model_->param.gamma);
-/*		for(int index = 0; ;index++){
-			if(x[index].index == -1)
-				break;
-			fprintf(stderr,"%d:%.2f ",x[index].index, x[index].value);
-		}*/
 		int w_p = 0;
 		for(int i=0; i<nr_w; i++){
 			int cSV_i = model_->cSV[i];
 			for(int j=0; j<cSV_i; j++){
-//				if(Q_r[w_p] != 0)
-//					fprintf(stderr, "%d:%lf ", w_p, Q_r[w_p]);
+				if(Q_r[w_p] != 0)
+					fprintf(stderr, "%d:%lf ", w_p, Q_r[w_p]);
 				dec_values[i] += w[w_p] * Q_r[w_p];
 				w_p++;
 			}
@@ -2979,7 +2971,7 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 			w_p++;
 //			fprintf(stderr, "%lf ",dec_values[i]);
 		}
-//		fprintf(stderr, "\n");
+		fprintf(stderr, "\n");
 		//TODO voting, maybe copy libSVM
 		int *vote = new int[nr_class];
 		for(int i=0;i<nr_class;i++)
