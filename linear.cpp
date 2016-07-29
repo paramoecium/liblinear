@@ -131,26 +131,26 @@ static int* random_sampling(int* sample_id, const int sample_size,
 	const int arr_size){ /*"inside-out" variant of Fisher–Yates shuffle*/
 	std::random_device rd;
 	std::mt19937 gen(rd());
-	//assert(sample_size < arr_size);
-	std::vector<int> b(sample_size);
+	int *b = Malloc(int, arr_size);
+	int tmp;
+	for(int i = 0; i < arr_size; i++)
+		b[i] = i;
 
-	for(int i = 0; i != arr_size; ++i) {
-			std::uniform_int_distribution<> dis(0, i);
-			int j = dis(gen);
-			if((unsigned int)j < b.size()) {
-					if(i < j) {
-							b[i] = b[j];
-					}
-					b[j] = i;
-			}
+	for(int i = arr_size-1; i >= arr_size-sample_size; i--) {
+		std::uniform_int_distribution<> dis(0, i);
+		int j = dis(gen);
+		tmp = b[j];
+		b[j] = b[i];
+		b[i] = tmp;
 	}
-	std::copy(b.begin(), b.end(), sample_id);
+	for(int i = 0; i < sample_size; i++)
+		sample_id[i] = b[arr_size-sample_size+i];
 	return sample_id;
 }
 static double* truncated_RBF(double *Q, const feature_node* const * A,
 	const feature_node* const * B, const int nA, const int nB,
 	const double threshold, const double gamma){
-	fprintf(stderr,"nA=%d, nB=%d\n", nA, nB);
+//	fprintf(stderr,"nA=%d, nB=%d\n", nA, nB);
 	double d_thresh_sq = log(threshold)/-gamma;
 	int truncate_count = 0;
 	for(int i=0; i<nA; i++){
@@ -182,20 +182,18 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 				sum += xb->value * xb->value;
 				++xb;
 			}
-			if(sum >= d_thresh_sq){
+			if(sum <= d_thresh_sq){
 				Q[nB*i + j] = exp(-gamma*sum);
 			}else{
 				truncate_count++;
 			}
-			//fprintf(stderr,"%.2f ", Q[nB*i + j]);
 		}
-		//fprintf(stderr,"\n");
 	}
 
 	if(nA>1) {
-		fprintf(stderr, "thresh = %.2f, %.4f%% entries of Q are truncated.\n",
+		fprintf(stderr, "thresh = %lf, %.4f %% entries of Q are truncated.\n",
 			threshold, truncate_count*100/(double)(nA*nB));
-		fprintf(stderr, "d_thresh = %.2f, gamma = %.2f\n", sqrt(d_thresh_sq)
+		fprintf(stderr, "d_thresh = %.4f, gamma = %.2f\n", sqrt(d_thresh_sq)
 			, gamma);
 	}
 	return Q;
@@ -223,22 +221,19 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	const parameter *param, double Cp, double Cn, int m1, int m2)
 {
 	int l = prob->l;
-//	int m1 = param->m1;
-//	int m2 = param->m2;
 	feature_node **x = prob->x;
 	double *y = prob->y;
 
 	double *Q_r = new double[l*m1]; //TODO make it stored in sparse form
-//	int *sample_id = new int[m1];
-	int *sample_id = (int*)Malloc(int, m1);
+	int *sample_id = Malloc(int, m1);
 	feature_node **selected_x = new feature_node*[m1];
 
-	fprintf(stderr, "before random_sampling\n");
+	//random sampling
 	sample_id = random_sampling(sample_id, m1, l);
 	for(int i = 0; i < m1; i++){
 		selected_x[i] = x[sample_id[i]];
 	}
-	for(int i=0; i<m1; i++){
+	for(int i = 0; i < m1; i++){
 		SV[i] = x[sample_id[i]];
 	}
 	free(sample_id);
@@ -2579,7 +2574,10 @@ model* train(const problem *prob, const parameter *param)
 					}
 				}
 
-				fprintf(stderr, "nSV = %d, cSV = %d\n", model_->nSV, model_->cSV[0]);
+				fprintf(stderr, "nSV = %d, cSV = ", model_->nSV);
+				for(i = 0; i < p; i++)
+					fprintf(stderr, "%d, ", model_->cSV[i]);
+				fprintf(stderr, "\n");
 
 				model_->SV = Malloc(feature_node *, model_->nSV);
 				model_->w = Malloc(double, model_->nSV+(model_->nr_class*(model_->nr_class-1))/2);
@@ -2587,9 +2585,9 @@ model* train(const problem *prob, const parameter *param)
 				p = 0;
 				int SV_begin = 0;
 				int wp = 0;
+				problem sub_prob;
 				for(i=0;i<nr_class;i++)
 					for(j=i+1;j<nr_class;j++){
-						problem sub_prob;
 						int si = start[i], sj = start[j];
 						int ci = count[i], cj = count[j];
 						sub_prob.l = ci+cj;
@@ -2618,20 +2616,18 @@ model* train(const problem *prob, const parameter *param)
 							for(int k=0;k<model_->cSV[p];k++)
 								w[k] = param->init_sol[p];
 						else
-							for(k=0;k<=model_->cSV[p];k++)
+							for(int k=0;k<=model_->cSV[p];k++)
 								w[k] = 0;
-						fprintf(stderr, "Going to trina_one function\n");
-						//TODO where we call solve_r_ls_svm_svc
+						
 						solve_r_ls_svm_svc(&sub_prob, w, &model_->SV[SV_begin], param,
 							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i);
-						fprintf(stderr, "Out of trina_one function\n");
+						
 						SV_begin += model_->cSV[p];
 
 						for(int k=0;k<=model_->cSV[p];k++){
 							model_->w[wp] = w[k];
 							wp++;
 						}
-						fprintf(stderr, "save w successfully\n");
 
 						free(sub_prob.x);
 						free(sub_prob.y);
@@ -2964,6 +2960,7 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		//TODO get SV
 		feature_node **SV = model_->SV;
 		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma);
+//		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, 0, model_->param.gamma);
 /*		for(int index = 0; ;index++){
 			if(x[index].index == -1)
 				break;
@@ -2973,6 +2970,8 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		for(int i=0; i<nr_w; i++){
 			int cSV_i = model_->cSV[i];
 			for(int j=0; j<cSV_i; j++){
+//				if(Q_r[w_p] != 0)
+//					fprintf(stderr, "%d:%lf ", w_p, Q_r[w_p]);
 				dec_values[i] += w[w_p] * Q_r[w_p];
 				w_p++;
 			}

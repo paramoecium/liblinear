@@ -475,7 +475,7 @@ void read_problem(const char *filename)
 	else
 		prob.n=max_index;
 
-	fprintf(stderr,"finished read problems\n");
+	fprintf(stderr, "problem.n = %d, problem.l = %d\n", prob.n, prob.l);
 
 	fclose(fp);
 }
