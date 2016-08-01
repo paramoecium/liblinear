@@ -2957,13 +2957,23 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		double *Q_r = new double[nSV];
 		//TODO get SV
 		feature_node **SV = model_->SV;
+/*		for(int i = 0; i < nSV; i++){
+			feature_node* node = SV[i];
+			fprintf(stderr, "%d ", i);
+			while(node->index != -1){
+				fprintf(stderr, "%d:%lf ", node->index, node->value);
+				node++;
+			}
+			fprintf(stderr, "\n");
+		}*/
+
 		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma);
 		int w_p = 0;
 		for(int i=0; i<nr_w; i++){
 			int cSV_i = model_->cSV[i];
 			for(int j=0; j<cSV_i; j++){
-				if(Q_r[w_p] != 0)
-					fprintf(stderr, "%d:%lf ", w_p, Q_r[w_p]);
+//				if(Q_r[w_p] != 0)
+//					fprintf(stderr, "%d:%lf ", w_p, Q_r[w_p]);
 				dec_values[i] += w[w_p] * Q_r[w_p];
 				w_p++;
 			}
@@ -2971,7 +2981,7 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 			w_p++;
 //			fprintf(stderr, "%lf ",dec_values[i]);
 		}
-		fprintf(stderr, "\n");
+//		fprintf(stderr, "\n");
 		//TODO voting, maybe copy libSVM
 		int *vote = new int[nr_class];
 		for(int i=0;i<nr_class;i++)
@@ -3338,14 +3348,21 @@ struct model *load_model(const char *model_file_name)
 			readline(fp);
 
 			int j=0;
+			bool first;
 			for(i=0;i<l;i++)
 			{
 				readline(fp);
 				model_->SV[i] = &x_space[j];
+				first = true;
 
 				while(1)
 				{
-					idx = strtok(NULL, ":");
+					if(first){
+						idx = strtok(line, ":");
+						first = false;
+					}
+					else
+						idx = strtok(NULL, ":");
 					val = strtok(NULL, " \t");
 
 					if(val == NULL)
