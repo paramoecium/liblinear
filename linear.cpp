@@ -218,7 +218,7 @@ static double* random_projection(double* projected_matrix,
 	return projected_matrix;
 }
 static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV,
-	const parameter *param, double Cp, double Cn, int m1, int m2)
+	const parameter *param, double Cp, double Cn, int m1, int m2, int cim1, int cjm1, int ci, int cj)
 {
 	int l = prob->l;
 	feature_node **x = prob->x;
@@ -229,7 +229,17 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	feature_node **selected_x = new feature_node*[m1];
 
 	//random sampling
-	sample_id = random_sampling(sample_id, m1, l);
+	int *sample_id1 = Malloc(int, cim1);
+	int *sample_id2 = Malloc(int, cjm1);
+	sample_id1 = random_sampling(sample_id1, cim1, ci);
+	sample_id2 = random_sampling(sample_id2, cjm1, cj);
+	for(int i = 0; i < cim1; i++)
+		sample_id[i] = sample_id1[i];
+	for(int i = 0; i < cjm1; i++)
+		sample_id[i+cim1] = sample_id2[i];
+	free(sample_id1);
+	free(sample_id2);
+//	sample_id = random_sampling(sample_id, m1, l);
 	for(int i = 0; i < m1; i++){
 		selected_x[i] = x[sample_id[i]];
 	}
@@ -2588,6 +2598,8 @@ model* train(const problem *prob, const parameter *param)
 					for(j=i+1;j<nr_class;j++){
 						int si = start[i], sj = start[j];
 						int ci = count[i], cj = count[j];
+						int cim1 = (int)(ci*param->m1_r);
+						int cjm1 = (int)(cj*param->m1_r);
 						sub_prob.l = ci+cj;
 						sub_prob.n = n;
 						sub_prob.x = Malloc(feature_node *,sub_prob.l);
@@ -2597,6 +2609,10 @@ model* train(const problem *prob, const parameter *param)
 						double *w = (double*)Malloc(double, model_->cSV[p]+1);
 						rp_size_d = model_->cSV[p]*param->m2_r;
 						rp_size_i = (int)rp_size_d;
+						if(cim1+cjm1 < model_->cSV[p])
+							cim1 += model_->cSV[p]-cim1-cjm1;
+						else if(cim1+cjm1 > model_->cSV[p])
+							fprintf(stderr, "cimi&cjm1 are wrong.\n");
 
 						int k;
 						for(k=0;k<ci;k++)
@@ -2618,7 +2634,7 @@ model* train(const problem *prob, const parameter *param)
 								w[k] = 0;
 						
 						solve_r_ls_svm_svc(&sub_prob, w, &model_->SV[SV_begin], param,
-							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i);
+							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i, cim1, cjm1, ci, cj);
 						
 						SV_begin += model_->cSV[p];
 
