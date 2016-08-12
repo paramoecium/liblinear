@@ -124,7 +124,7 @@ void do_predict(FILE *input, FILE *output)
 			if(x[i].index <= nr_feature)
 				++i;
 		}
-
+		
 		if(model_->bias>=0)
 		{
 			x[i].index = n;

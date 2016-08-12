@@ -236,10 +236,9 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	for(int i = 0; i < cim1; i++)
 		sample_id[i] = sample_id1[i];
 	for(int i = 0; i < cjm1; i++)
-		sample_id[i+cim1] = sample_id2[i];
+		sample_id[i+cim1] = ci+sample_id2[i];
 	free(sample_id1);
 	free(sample_id2);
-//	sample_id = random_sampling(sample_id, m1, l);
 	for(int i = 0; i < m1; i++){
 		selected_x[i] = x[sample_id[i]];
 	}
@@ -2998,7 +2997,6 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 //			fprintf(stderr, "%lf ",dec_values[i]);
 		}
 //		fprintf(stderr, "\n");
-		//TODO voting, maybe copy libSVM
 		int *vote = new int[nr_class];
 		for(int i=0;i<nr_class;i++)
 			vote[i] = 0;
