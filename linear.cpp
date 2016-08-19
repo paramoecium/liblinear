@@ -145,6 +145,7 @@ static int* random_sampling(int* sample_id, const int sample_size,
 	}
 	for(int i = 0; i < sample_size; i++)
 		sample_id[i] = b[arr_size-sample_size+i];
+	free(b);
 	return sample_id;
 }
 static double* truncated_RBF(double *Q, const feature_node* const * A,
@@ -183,8 +184,8 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 			}
 			if(sum <= d_thresh_sq){
 				Q[nB*i + j] = exp(-gamma*sum);
-				//fprintf(stderr,"%d:%.2f ", j, Q[nB*i + j]);
 			}else{
+				Q[nB*i + j] = 0;
 				truncate_count++;
 			}
 		}
@@ -223,9 +224,10 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	int l = prob->l;
 	feature_node **x = prob->x;
 	double *y = prob->y;
-
+	
 	double *Q_r = new double[l*m1]; //TODO make it stored in sparse form
 	int *sample_id = Malloc(int, m1);
+
 	feature_node **selected_x = new feature_node*[m1];
 
 	//random sampling
@@ -248,6 +250,8 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	//bias is at the end of each x, and won't affect the kernel value
 	fprintf(stderr, "before RBF_truncate\n");
 	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma);
+//	free(selected_x);
+	delete [] selected_x;
 
 	double *rp_arr = new double[m2*m1];
 	std::default_random_engine generator;
@@ -257,6 +261,8 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 			rp_arr[i*m1 + j] = distribution(generator);
 		}
 	}
+
+	//tmp = (long long)l*(long long)(m2+1);
 	double *Q_rr = new double[l*(m2+1)]; //append bias at the end
 	fprintf(stderr, "before random projection\n");
 	Q_rr = random_projection(Q_rr, Q_r, y, l, m1, rp_arr, m2, true);
@@ -996,7 +1002,7 @@ static void solve_l2r_l1l2_svc(
 	int i, s, iter = 0;
 	double C, d, G;
 	double *QD = new double[l];
-	int max_iter = 1000;
+	int max_iter = 100000;
 	int *index = new int[l];
 	double *alpha = new double[l];
 	schar *y = new schar[l];
@@ -2631,7 +2637,8 @@ model* train(const problem *prob, const parameter *param)
 						else
 							for(int k=0;k<=model_->cSV[p];k++)
 								w[k] = 0;
-						
+					
+						fprintf(stderr, "In submodel %d v.s. %d\n", i, j);
 						solve_r_ls_svm_svc(&sub_prob, w, &model_->SV[SV_begin], param,
 							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i, cim1, cjm1, ci, cj);
 						
@@ -2966,37 +2973,23 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 
 	for(int i=0;i<nr_w;i++)
 		dec_values[i] = 0;
-	//TODO compute decision value
 	if(model_->param.solver_type == R_LS_SVM){
 		int nSV = model_->nSV;
 		double *Q_r = new double[nSV];
-		//TODO get SV
 		feature_node **SV = model_->SV;
-/*		for(int i = 0; i < nSV; i++){
-			feature_node* node = SV[i];
-			fprintf(stderr, "%d ", i);
-			while(node->index != -1){
-				fprintf(stderr, "%d:%lf ", node->index, node->value);
-				node++;
-			}
-			fprintf(stderr, "\n");
-		}*/
 
 		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma);
 		int w_p = 0;
 		for(int i=0; i<nr_w; i++){
 			int cSV_i = model_->cSV[i];
 			for(int j=0; j<cSV_i; j++){
-//				if(Q_r[w_p] != 0)
-//					fprintf(stderr, "%d:%lf ", w_p, Q_r[w_p]);
 				dec_values[i] += w[w_p] * Q_r[w_p];
 				w_p++;
 			}
-			dec_values[i] += w[w_p] * model_->bias;
+			if(dec_values[i] != 0)
+				dec_values[i] += w[w_p] * model_->bias;
 			w_p++;
-//			fprintf(stderr, "%lf ",dec_values[i]);
 		}
-//		fprintf(stderr, "\n");
 		int *vote = new int[nr_class];
 		for(int i=0;i<nr_class;i++)
 			vote[i] = 0;
@@ -3005,7 +2998,7 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 			for(int j=i+1;j<nr_class;j++){
 				if(dec_values[p] > 0)
 					++vote[i];
-				else
+				else if(dec_values[p] < 0)
 					++vote[j];
 				p++;
 			}
@@ -3014,6 +3007,9 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		for(int i=1;i<nr_class;i++)
 			if(vote[i] > vote[vote_max_idx])
 				vote_max_idx = i;
+		delete [] vote;
+		delete [] Q_r;
+
 		return model_->label[vote_max_idx];
 	}else{
 		const feature_node *lx=x;
