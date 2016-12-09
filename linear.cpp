@@ -148,11 +148,19 @@ static int* random_sampling(int* sample_id, const int sample_size,
 	free(b);
 	return sample_id;
 }
+int compare(const void *a, const void *b){
+	double c = *(double*)a;
+	double d = *(double*)b;
+	if(c < d){return -1;}
+	else if(c == d){return 0;}
+	else return 1;
+}
 static double* truncated_RBF(double *Q, const feature_node* const * A,
 	const feature_node* const * B, const int nA, const int nB,
-	const double threshold, const double gamma){
+	const double threshold, const double gamma, const bool auto_threshold){
 	double d_thresh_sq = log(threshold)/-gamma;
-	int truncate_count = 0;
+	int truncate_count = 0, atn;
+	double* Q_s;
 	for(int i=0; i<nA; i++){
 		for(int j=0; j<nB; j++){
 			const feature_node* xa = A[i];
@@ -182,13 +190,31 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 				sum += xb->value * xb->value;
 				++xb;
 			}
-			if(sum <= d_thresh_sq){
+			if(!auto_threshold){
+				if(sum <= d_thresh_sq){
+					Q[nB*i + j] = exp(-gamma*sum);
+				}else{
+					Q[nB*i + j] = 0;
+					truncate_count++;
+				}
+			}
+			else
 				Q[nB*i + j] = exp(-gamma*sum);
-			}else{
-				Q[nB*i + j] = 0;
+		}
+	}
+	if(auto_threshold){
+		Q_s = (double*)malloc(nA*nB*sizeof(double));
+		for(int i = 0; i < nA*nB; i++)
+			Q_s[i] = Q[i];
+		qsort((void*)Q_s, nA*nB, sizeof(double), compare);
+		atn = (int)(threshold*nA*nB);
+		double a_threshold = Q_s[atn];
+		fprintf(stderr, "auto_threshold = %lf\n", Q_s[atn]);
+		for(int i = 0; i < nA*nB; i++)
+			if(Q[i] <= a_threshold){
+				Q[i] = 0;
 				truncate_count++;
 			}
-		}
 	}
 
 	if(nA>1) {
@@ -249,7 +275,7 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	}
 	//bias is at the end of each x, and won't affect the kernel value
 	fprintf(stderr, "before RBF_truncate\n");
-	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma);
+	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma, param->auto_threshold);
 //	free(selected_x);
 	delete [] selected_x;
 
@@ -2978,7 +3004,7 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		double *Q_r = new double[nSV];
 		feature_node **SV = model_->SV;
 
-		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma);
+		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma, false);
 		int w_p = 0;
 		for(int i=0; i<nr_w; i++){
 			int cSV_i = model_->cSV[i];

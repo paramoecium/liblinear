@@ -287,8 +287,14 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 				param.gamma = atof(argv[i]);
 				break;
 
+			case 'T':
+				param.threshold = atof(argv[i]);
+				param.auto_threshold = true;
+				break;
+
 			case 't':
 				param.threshold = atof(argv[i]);
+				param.auto_threshold = false;
 				break;
 
 			case 'M':
