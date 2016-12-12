@@ -25,7 +25,8 @@ void exit_with_help()
 	"	 5 -- L1-regularized L2-loss support vector classification\n"
 	"	 6 -- L1-regularized logistic regression\n"
 	"	 7 -- L2-regularized logistic regression (dual)\n"
-	"	 8 -- R_LS_SVM model\n"
+	"	 8 -- CSSVM model\n"
+	"	 9 -- TRSVM model\n"
 	"  for regression\n"
 	"	11 -- L2-regularized L2-loss support vector regression (primal)\n"
 	"	12 -- L2-regularized L2-loss support vector regression (dual)\n"
@@ -53,6 +54,7 @@ void exit_with_help()
 	"-C : find parameter C (only for -s 0 and 2)\n"
 	"-g : gamma in rbf kenerl\n"
 	"-t : threshold for rbf kernel value\n"
+	"-T : auto threshold for rbf kernel value\n"
 	"-M : m1 : ratio of reduced set in RSVM\n"
 	"-m : m2 : ratio of random measurements\n"
 	"-q : quiet mode (no outputs)\n"
@@ -217,6 +219,7 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 	param.init_sol = NULL;
 	param.gamma = 0.1;
 	param.threshold = 0.1;
+	param.auto_threshold = false;
 	param.m1_r = 0.01;
 	param.m2_r = 0.1;
 	flag_cross_validation = 0;
@@ -235,6 +238,8 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 		{
 			case 's':
 				param.solver_type = atoi(argv[i]);
+				if(param.solver_type == TRSVM)
+					param.threshold = 0;
 				flag_solver_specified = 1;
 				break;
 
@@ -376,6 +381,10 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 				break;
 			case R_LS_SVM:
 				fprintf(stdout, "successfully choose R_LS_SVM.\n");
+				param.eps = 0.1;
+				break;
+			case TRSVM:
+				fprintf(stdout, "successfully choose TRSVM.\n");
 				param.eps = 0.1;
 				break;
 		}
