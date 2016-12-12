@@ -40,7 +40,6 @@ struct parameter
 	double m1_r;/* ratio of reduced set */
 	double m2_r;/* ratio of random projection */
 	double threshold;
-	double* a_threshold;
 	bool auto_threshold;
 };
 
@@ -55,6 +54,7 @@ struct model
 	//TODO
 	int nSV;
 	int *cSV;
+	double* a_threshold;
 	struct feature_node **SV;
 };
 

@@ -157,7 +157,7 @@ int compare(const void *a, const void *b){
 }
 static double* truncated_RBF(double *Q, const feature_node* const * A,
 	const feature_node* const * B, const int nA, const int nB,
-	const double threshold, const double gamma, const bool auto_threshold){
+	const double threshold, const double gamma, const bool auto_threshold, double* a_threshold){
 	double d_thresh_sq = log(threshold)/-gamma;
 	int truncate_count = 0, atn;
 	double* Q_s;
@@ -208,10 +208,10 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 			Q_s[i] = Q[i];
 		qsort((void*)Q_s, nA*nB, sizeof(double), compare);
 		atn = (int)(threshold*nA*nB);
-		double a_threshold = Q_s[atn];
+		a_threshold[0] = Q_s[atn];
 		fprintf(stderr, "auto_threshold = %lf\n", Q_s[atn]);
 		for(int i = 0; i < nA*nB; i++)
-			if(Q[i] <= a_threshold){
+			if(Q[i] <= Q_s[atn]){
 				Q[i] = 0;
 				truncate_count++;
 			}
@@ -245,7 +245,7 @@ static double* random_projection(double* projected_matrix,
 	return projected_matrix;
 }
 static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV,
-	const parameter *param, double Cp, double Cn, int m1, int m2, int cim1, int cjm1, int ci, int cj)
+	const parameter *param, double Cp, double Cn, int m1, int m2, int cim1, int cjm1, int ci, int cj, double* a_threshold)
 {
 	int l = prob->l;
 	feature_node **x = prob->x;
@@ -275,8 +275,8 @@ static void solve_r_ls_svm_svc(const problem *prob, double *w, feature_node **SV
 	}
 	//bias is at the end of each x, and won't affect the kernel value
 	fprintf(stderr, "before RBF_truncate\n");
-	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma, param->auto_threshold);
-//	free(selected_x);
+	Q_r = truncated_RBF(Q_r, x, selected_x, l, m1, param->threshold, param->gamma, param->auto_threshold, a_threshold);
+	
 	delete [] selected_x;
 
 	double *rp_arr = new double[m2*m1];
@@ -2596,6 +2596,8 @@ model* train(const problem *prob, const parameter *param)
 				fprintf(stderr, "In R_LS_SVM, class_nr = %d\n", nr_class);
 				double r_size_d, rp_size_d;
 				int rp_size_i;
+				if(param->auto_threshold)
+					model_->a_threshold = (double*)malloc(sizeof(double)*nr_class*(nr_class-1)/2);
 				model_->nSV = 0;
 				model_->cSV = (int*)Malloc(int, nr_class*(nr_class-1)/2);
 
@@ -2665,9 +2667,13 @@ model* train(const problem *prob, const parameter *param)
 								w[k] = 0;
 					
 						fprintf(stderr, "In submodel %d v.s. %d\n", i, j);
-						solve_r_ls_svm_svc(&sub_prob, w, &model_->SV[SV_begin], param,
-							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i, cim1, cjm1, ci, cj);
-						
+						if(!param->auto_threshold){
+							solve_r_ls_svm_svc(&sub_prob, w, &model_->SV[SV_begin], param,
+							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i, cim1, cjm1, ci, cj, NULL);
+						}else{
+							solve_r_ls_svm_svc(&sub_prob, w, &model_->SV[SV_begin], param,
+							weighted_C[i], weighted_C[j], model_->cSV[p], rp_size_i, cim1, cjm1, ci, cj, &model_->a_threshold[p]);
+						}
 						SV_begin += model_->cSV[p];
 
 						for(int k=0;k<=model_->cSV[p];k++){
@@ -3004,11 +3010,15 @@ double predict_values(const struct model *model_, const struct feature_node *x, 
 		double *Q_r = new double[nSV];
 		feature_node **SV = model_->SV;
 
-		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma, false);
+		Q_r = truncated_RBF(Q_r, &x, SV, 1, nSV, model_->param.threshold, model_->param.gamma, false, NULL);
 		int w_p = 0;
 		for(int i=0; i<nr_w; i++){
 			int cSV_i = model_->cSV[i];
 			for(int j=0; j<cSV_i; j++){
+				if(model_->param.auto_threshold && Q_r[w_p] < model_->a_threshold[i]){
+					w_p++;
+					continue;
+				}	
 				dec_values[i] += w[w_p] * Q_r[w_p];
 				w_p++;
 			}
@@ -3168,7 +3178,14 @@ int save_model(const char *model_file_name, const struct model *model_)
 	if(param.solver_type == R_LS_SVM){
 		w_size = model_->nSV+(model_->nr_class-1)*model_->nr_class/2;
 		fprintf(fp, "gamma\n%.8g\n", param.gamma);
-		fprintf(fp, "threshold\n%.8g\n", param.threshold);
+		if(param.auto_threshold){	
+			fprintf(fp, "auto_threshold\n");
+			for(i = 0; i < model_->nr_class*(model_->nr_class-1)/2; i++)
+				fprintf(fp, "%.8g ", model_->a_threshold[i]);
+			fprintf(fp, "\n");
+		}
+		else
+			fprintf(fp, "threshold\n%.8g\n", param.threshold);
 		fprintf(fp, "nSV\n%d\n", model_->nSV);
 		fprintf(fp, "cSV");
 		for(i = 0; i < model_->nr_class*(model_->nr_class-1)/2; i++)
@@ -3348,8 +3365,16 @@ struct model *load_model(const char *model_file_name)
 			FSCANF(fp,"%lf",&gamma);
 			param.gamma = gamma;
 		}
+		else if(strcmp(cmd,"auto_threshold")==0){
+			param.threshold = 0;
+			param.auto_threshold = true;
+			model_->a_threshold = Malloc(double,nr_class*(nr_class-1)/2);
+			for(i = 0; i < nr_class*(nr_class-1)/2; i++)
+				FSCANF(fp, "%lf", &model_->a_threshold[i]);
+		}
 		else if(strcmp(cmd,"threshold")==0){
 			FSCANF(fp,"%lf",&threshold);
+			param.auto_threshold = false;
 			param.threshold = threshold;
 		}
 		else if(strcmp(cmd,"SV")==0){
