@@ -215,6 +215,7 @@ static double* truncated_RBF(double *Q, const feature_node* const * A,
 				Q[i] = 0;
 				truncate_count++;
 			}
+		free(Q_s);
 	}
 
 	if(nA>1) {
